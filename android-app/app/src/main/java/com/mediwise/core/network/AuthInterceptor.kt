@@ -13,11 +13,19 @@ class AuthInterceptor @Inject constructor(
     private val sessionDataStore: SessionDataStore
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        val firebaseToken = runBlocking {
-            FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+        val sessionToken = runBlocking { sessionDataStore.accessToken.first() }
+        val token = if (!sessionToken.isNullOrBlank()) {
+            sessionToken
+        } else {
+            runBlocking {
+                try {
+                    FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+                } catch (e: Exception) {
+                    null
+                }
+            }
         }
-        val token = firebaseToken ?: runBlocking { sessionDataStore.accessToken.first() }
-        val request = if (token != null) {
+        val request = if (!token.isNullOrBlank()) {
             chain.request().newBuilder()
                 .addHeader("Authorization", "Bearer $token")
                 .build()

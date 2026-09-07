@@ -20,8 +20,8 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "BASE_URL", "\"http://localhost:8080/\"")
-        buildConfigField("String", "WS_URL", "\"ws://localhost:8080/ws\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.142.33.102:8080/\"")
+        buildConfigField("String", "WS_URL", "\"ws://10.142.33.102:8080/ws\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"REPLACE_WITH_FIREBASE_WEB_CLIENT_ID\"")
     }
 

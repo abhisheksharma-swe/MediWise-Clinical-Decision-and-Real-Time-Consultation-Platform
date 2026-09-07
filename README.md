@@ -77,4 +77,4 @@ The project follows patterns and technologies commonly used in modern production
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -71,8 +72,9 @@ public class AuthController {
     @GetMapping("/me")
     @Operation(summary = "Get current authenticated user information")
     public ResponseEntity<ApiResponse<AuthResponse.UserInfo>> getCurrentUser(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
-            Authentication authentication) {
+            @AuthenticationPrincipal User currentUser,
+            Authentication authentication
+    ) {
         UUID userId = null;
         if (currentUser != null && currentUser.getId() != null) {
             userId = currentUser.getId();
@@ -91,7 +93,7 @@ public class AuthController {
     @PostMapping("/change-password")
     @Operation(summary = "Change password for authenticated user")
     public ResponseEntity<ApiResponse<Void>> changePassword(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User currentUser,
+            @AuthenticationPrincipal User currentUser,
             @Valid @RequestBody ChangePasswordRequest request) {
         if (currentUser == null || currentUser.getId() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

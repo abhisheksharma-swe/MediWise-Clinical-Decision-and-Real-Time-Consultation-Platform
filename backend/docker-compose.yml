@@ -1,6 +1,5 @@
 services:
 
-  # ─── Spring Boot Application ──────────────────────────────────────────────
   app:
     build:
       context: .
@@ -9,21 +8,22 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: local
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/clinical_db
-      SPRING_DATASOURCE_USERNAME: clinical_user
-      SPRING_DATASOURCE_PASSWORD: clinical_pass
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/clinical_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-clinical_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-clinical_pass}
       SPRING_DATA_MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/clinical_chat}
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
-      APP_JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-in-prod-min-256-bits}
-      APP_JWT_EXPIRATION_MS: 900000        # 15 minutes
-      APP_JWT_REFRESH_EXPIRATION_MS: 604800000  # 7 days
+      SPRING_REDIS_HOST: ${SPRING_REDIS_HOST:-redis}
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
+      JWT_SECRET: ${JWT_SECRET}
+      APPLICATION_JWT_SECRET: ${JWT_SECRET}
+      APPLICATION_JWT_EXPIRATION: ${APPLICATION_JWT_EXPIRATION:-900000}
+      APPLICATION_JWT_REFRESH_EXPIRATION: ${APPLICATION_JWT_REFRESH_EXPIRATION:-604800000}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-clinical-dev-bucket}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_KEY:-}
+      AWS_S3_BUCKET: ${S3_BUCKET:-clinical-dev-bucket}
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,7 +35,6 @@ services:
     networks:
       - clinical-net
 
-  # ─── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: clinical-postgres
@@ -55,7 +54,6 @@ services:
     networks:
       - clinical-net
 
-  # ─── MongoDB ───────────────────────────────────────────────────────────────
   mongo:
     image: mongo:7-jammy
     container_name: clinical-mongo
@@ -73,7 +71,6 @@ services:
     networks:
       - clinical-net
 
-  # ─── Redis ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: clinical-redis

@@ -55,6 +55,8 @@ target/
 *.jar
 !backend/.mvn/wrapper/maven-wrapper.jar
 backend/*.log
+backend/mvnw.cmd
+backend/mvnw
 backend/pom.xml.tag
 backend/pom.xml.releaseBackup
 backend/pom.xml.versionsBackup

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,7 +48,6 @@ fun ProfileScreen(
         viewModel.loadProfile()
     }
 
-    // Photo picker launcher for bonus avatar upload
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -73,17 +73,6 @@ fun ProfileScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Profile", fontWeight = FontWeight.Bold, color = TextPrimary) },
-                actions = {
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundWhite)
-            )
-        },
         containerColor = BackgroundWhite
     ) { padding ->
         LazyColumn(
@@ -93,112 +82,155 @@ fun ProfileScreen(
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                Box(
+
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(PrimaryBlue, PrimaryBlueDark)))
-                        .padding(top = 24.dp, bottom = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box {
-                            Box(
-                                modifier = Modifier
-                                    .size(88.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.25f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (!profile?.profileImageUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = profile?.profileImageUrl,
-                                        contentDescription = "Avatar",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Text(
-                                        initials,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 28.sp
-                                    )
-                                }
-                            }
-                            Surface(
-                                shape = CircleShape,
-                                color = PrimaryBlue,
-                                shadowElevation = 2.dp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(28.dp)
-                                    .clickable { imagePickerLauncher.launch("image/*") }
-                            ) {
-                                if (uiState.isUploadingImage) {
-                                    CircularProgressIndicator(
-                                        color = Color.White,
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier.padding(4.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.CameraAlt,
-                                        contentDescription = "Upload Photo",
-                                        tint = Color.White,
-                                        modifier = Modifier.padding(6.dp).size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
+                        .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
+                        .background(Brush.horizontalGradient(colors = listOf(PrimaryBlue,PrimaryBlueDark)))
+                        .padding(start =18.dp, end = 18.dp, top = 12.dp, bottom = 20.dp)
+                ){
+
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ){
+
                         Text(
-                            profile?.fullName?.ifBlank { "User" } ?: "User",
+                            text = "My Profile",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            fontSize = 18.sp,
+                            modifier = Modifier.weight(1f)
                         )
-                        if (!profile?.email.isNullOrBlank()) {
-                            Text(
-                                profile?.email ?: "",
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 14.sp
-                            )
-                        }
-                        if (!profile?.phone.isNullOrBlank()) {
-                            Text(
-                                profile?.phone ?: "",
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = onEditClick,
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.2f)
-                            ),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
-                        ) {
+
+                        IconButton(
+                            onClick = onSettingsClick,
+                            modifier = Modifier.size(40.dp)
+                        ){
                             Icon(
-                                Icons.Default.Edit,
-                                contentDescription = null,
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
                                 tint = Color.White,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Edit Profile", color = Color.White, fontSize = 13.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ){
+
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha=0.22f))
+                                .clickable{
+                                    imagePickerLauncher.launch("image/*")
+                                },
+                            contentAlignment = Alignment.Center
+                        ){
+                            if( !profile?.profileImageUrl.isNullOrBlank()){
+                                AsyncImage(
+                                    model = profile.profileImageUrl,
+                                    contentDescription = "Profile Image",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                )
+                            }else{
+                                Text(
+                                    text = initials,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp
+                                )
+                            }
+
+                            if(uiState.isUploadingImage){
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    color = Color.Black.copy(0.30f),
+                                    shape = CircleShape
+                                ){
+                                    Box(contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                        }
+
+                        Column(
+                            modifier = Modifier.padding(start = 16.dp).weight(1f)
+                        ) {
+                            Text(
+                                text = profile?.fullName?.ifBlank { "User" } ?: "User",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 18.sp,
+                                maxLines = 1,
+                            )
+
+                            Spacer(Modifier.height(2.dp))
+
+                            Text(
+                                text = profile?.email?.takeIf { it.isNotBlank() }
+                                    ?: "Complete your profile",
+                                color = Color.White.copy(alpha = 0.78f),
+                                fontSize = 14.sp,
+                                maxLines = 1
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .height(32.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 1.dp,
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(50)
+                                )
+                                .clickable(onClick = onEditClick)
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Edit",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Profile",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Real Stats Cards Row
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ProfileStatCard("${uiState.totalAppointments}", "Appointments", Modifier.weight(1f))
@@ -208,7 +240,6 @@ fun ProfileScreen(
                 }
             }
 
-            // Health Section
             item {
                 ProfileSection(title = "Health Information") {
                     ProfileMenuItem(
@@ -229,9 +260,8 @@ fun ProfileScreen(
                 }
             }
 
-            // Contact & Emergency Section
             item {
-                ProfileSection(title = "Contact & Emergency (Bonus)") {
+                ProfileSection(title = "Contact & Emergency") {
                     if (!profile?.address.isNullOrBlank()) {
                         ProfileMenuItem(
                             icon = Icons.Default.LocationOn,
@@ -274,7 +304,6 @@ fun ProfileScreen(
                 }
             }
 
-            // Sign Out Action
             item {
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
@@ -315,8 +344,8 @@ private fun ProfileStatCard(value: String, label: String, modifier: Modifier) {
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = PrimaryBlue)
             Text(label, fontSize = 11.sp, color = TextSecondary)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = PrimaryBlue)
         }
     }
 }
@@ -376,4 +405,4 @@ private fun ProfileMenuItem(
             modifier = Modifier.size(18.dp)
         )
     }
-}
+}

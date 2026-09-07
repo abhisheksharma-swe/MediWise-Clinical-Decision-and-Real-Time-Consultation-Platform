@@ -1,17 +1,18 @@
 -- V3__seed_default_doctors.sql
 -- Seed default specialized doctors, user accounts, weekly schedules, and time slots
 
--- 1. Insert Admin & Doctor User Accounts (Default password for all seeded accounts is: Doctor@12345 or Admin@12345)
--- Bcrypt hash with strength 12 for 'Doctor@12345': $2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG
+-- 1. Insert Admin & Doctor User Accounts (Admin password: Admin@12345, Doctor password: Doctor@12345)
+-- Bcrypt hash (strength 12) for 'Admin@12345': $2a$12$casd0AhSDQnW.otJNb0zYuRGJygVF.UPEgABj5.DlXilpw.td.dLm
+-- Bcrypt hash (strength 12) for 'Doctor@12345': $2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke
 INSERT INTO users (id, firebase_uid, email, phone, role, full_name, is_active, password_hash, created_at, updated_at)
 VALUES
-    ('00000000-0000-0000-0000-000000000001', 'firebase_admin_01', 'admin@mediwise.com', '+919876543200', 'ADMIN', 'System Administrator', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111101', 'firebase_doc_101', 'dr.sarah@mediwise.com', '+919876543201', 'DOCTOR', 'Dr. Sarah Johnson', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111102', 'firebase_doc_102', 'dr.rajesh@mediwise.com', '+919876543202', 'DOCTOR', 'Dr. Rajesh Sharma', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111103', 'firebase_doc_103', 'dr.elena@mediwise.com', '+919876543203', 'DOCTOR', 'Dr. Elena Rostova', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111104', 'firebase_doc_104', 'dr.marcus@mediwise.com', '+919876543204', 'DOCTOR', 'Dr. Marcus Chen', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111105', 'firebase_doc_105', 'dr.ananya@mediwise.com', '+919876543205', 'DOCTOR', 'Dr. Ananya Iyer', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW()),
-    ('11111111-1111-1111-1111-111111111106', 'firebase_doc_106', 'dr.david@mediwise.com', '+919876543206', 'DOCTOR', 'Dr. David Miller', true, '$2a$12$5l.72tJ93k9Yv31gR8kFpeH3fH0oT6Sg2c7n2w1L2w7O7n0O4i9pG', NOW(), NOW())
+    ('00000000-0000-0000-0000-000000000001', 'firebase_admin_01', 'admin@mediwise.com', '+919876543200', 'ADMIN', 'System Administrator', true, '$2a$12$casd0AhSDQnW.otJNb0zYuRGJygVF.UPEgABj5.DlXilpw.td.dLm', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111101', 'firebase_doc_101', 'dr.sarah@mediwise.com', '+919876543201', 'DOCTOR', 'Dr. Sarah Johnson', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111102', 'firebase_doc_102', 'dr.rajesh@mediwise.com', '+919876543202', 'DOCTOR', 'Dr. Rajesh Sharma', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111103', 'firebase_doc_103', 'dr.elena@mediwise.com', '+919876543203', 'DOCTOR', 'Dr. Elena Rostova', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111104', 'firebase_doc_104', 'dr.marcus@mediwise.com', '+919876543204', 'DOCTOR', 'Dr. Marcus Chen', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111105', 'firebase_doc_105', 'dr.ananya@mediwise.com', '+919876543205', 'DOCTOR', 'Dr. Ananya Iyer', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW()),
+    ('11111111-1111-1111-1111-111111111106', 'firebase_doc_106', 'dr.david@mediwise.com', '+919876543206', 'DOCTOR', 'Dr. David Miller', true, '$2a$12$by5Q4/1p9vVhRCfnFJ/KTeDwiB.FXRoeBIZpGwu3GB.P8ytp02Uke', NOW(), NOW())
 ON CONFLICT (email) DO NOTHING;
 
 -- 2. Insert Doctor Profiles
