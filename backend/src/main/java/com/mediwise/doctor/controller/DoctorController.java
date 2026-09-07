@@ -36,8 +36,10 @@ public class DoctorController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get doctor by ID")
-    public ResponseEntity<ApiResponse<DoctorResponse>> getDoctor(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.success(doctorService.getDoctorById(id)));
+    public ResponseEntity<ApiResponse<DoctorResponse>> getDoctor(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(ApiResponse.success(doctorService.getDoctorById(id, currentUser)));
     }
 
     @PostMapping("/{id}/favorite")

@@ -6,6 +6,14 @@ import com.mediwise.ai.model.AiReport;
 import com.mediwise.ai.model.SymptomLog;
 import com.mediwise.ai.repository.AiReportRepository;
 import com.mediwise.ai.repository.SymptomLogRepository;
+import com.mediwise.appointment.model.Appointment;
+import com.mediwise.appointment.repository.AppointmentRepository;
+import com.mediwise.auth.model.User;
+import com.mediwise.common.exception.UnauthorizedException;
+import com.mediwise.doctor.model.Doctor;
+import com.mediwise.doctor.repository.DoctorRepository;
+import com.mediwise.profile.model.PatientProfile;
+import com.mediwise.profile.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,8 +35,13 @@ public class AiService {
 
     private final AiReportRepository aiReportRepository;
     private final SymptomLogRepository symptomLogRepository;
+    private final PatientProfileRepository patientProfileRepository;
+    private final DoctorRepository doctorRepository;
+    private final AppointmentRepository appointmentRepository;
 
-    public AiReportResponse analyzeSymptoms(SymptomLogRequest request) {
+    public AiReportResponse analyzeSymptoms(SymptomLogRequest request, User user) {
+        assertSymptomLogAccess(request.getPatientId(), request.getAppointmentId(), user);
+
         // 1. Persist the symptom log
         SymptomLog log = new SymptomLog();
         log.setPatientId(request.getPatientId());
@@ -46,22 +59,80 @@ public class AiService {
         return toResponse(saved);
     }
 
-    public List<AiReportResponse> getReportsForPatient(UUID patientId) {
+    public List<AiReportResponse> getReportsForPatient(UUID patientId, User user) {
+        assertCanViewReports(patientId, user);
         return aiReportRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    public AiReportResponse getLatestReport(UUID patientId) {
+    public AiReportResponse getLatestReport(UUID patientId, User user) {
+        assertCanViewReports(patientId, user);
         return aiReportRepository.findTopByPatientIdOrderByCreatedAtDesc(patientId)
                 .map(this::toResponse)
                 .orElse(null);
     }
 
-    // ─── Stub implementation ────────────────────────────────────────────────────
+    // ─── Access control helpers ─────────────────────────────────────────────
+
+    private void assertSymptomLogAccess(UUID patientId, UUID appointmentId, User user) {
+        if (user.getRole() == User.Role.ADMIN) {
+            return;
+        }
+
+        if (appointmentId != null) {
+            Appointment appointment = appointmentRepository.findById(appointmentId).orElse(null);
+            if (appointment != null && appointment.getPatientId().equals(patientId)) {
+                if (user.getRole() == User.Role.DOCTOR) {
+                    UUID doctorId = doctorRepository.findByUserId(user.getId())
+                            .map(Doctor::getId).orElse(null);
+                    if (doctorId != null && appointment.getDoctorId().equals(doctorId)) {
+                        return;
+                    }
+                } else {
+                    UUID ownPatientId = patientProfileRepository.findByUserId(user.getId())
+                            .map(PatientProfile::getId).orElse(null);
+                    if (patientId.equals(ownPatientId)) {
+                        return;
+                    }
+                }
+            }
+        } else if (user.getRole() == User.Role.PATIENT) {
+            UUID ownPatientId = patientProfileRepository.findByUserId(user.getId())
+                    .map(PatientProfile::getId).orElse(null);
+            if (patientId.equals(ownPatientId)) {
+                return;
+            }
+        }
+
+        throw new UnauthorizedException("You do not have permission to log symptoms for this patient.");
+    }
+
+    private void assertCanViewReports(UUID patientId, User user) {
+        if (user.getRole() == User.Role.ADMIN) {
+            return;
+        }
+
+        if (user.getRole() == User.Role.PATIENT) {
+            UUID ownPatientId = patientProfileRepository.findByUserId(user.getId())
+                    .map(PatientProfile::getId).orElse(null);
+            if (patientId.equals(ownPatientId)) {
+                return;
+            }
+        } else if (user.getRole() == User.Role.DOCTOR) {
+            UUID doctorId = doctorRepository.findByUserId(user.getId())
+                    .map(Doctor::getId).orElse(null);
+            if (doctorId != null && appointmentRepository.existsByDoctorIdAndPatientId(doctorId, patientId)) {
+                return;
+            }
+        }
+
+        throw new UnauthorizedException("You do not have permission to view reports for this patient.");
+    }
+
+    // ─── Stub implementation ─────────────────────────────────────────────────
     // Replace with: webClient.post().uri(mlServiceUrl + "/predict/symptom-triage")...
 
     private AiReport stubAnalyze(SymptomLogRequest req) {
-        // Simple heuristic based on severity
         int urgency = switch (req.getSeverity() != null ? req.getSeverity().toUpperCase() : "LOW") {
             case "CRITICAL" -> 90;
             case "HIGH"     -> 70;
@@ -70,7 +141,7 @@ public class AiService {
         };
 
         String specialty = urgency > 65 ? "Emergency Medicine" :
-                           urgency > 40 ? "General Medicine" : "General Practice";
+                urgency > 40 ? "General Medicine" : "General Practice";
 
         AiReport report = new AiReport();
         report.setPatientId(req.getPatientId());
@@ -79,7 +150,7 @@ public class AiService {
         report.setModelVersion("1.0.0-stub");
         report.setUrgencyScore(urgency);
         report.setSuggestedSpecialty(specialty);
-        report.setConfidence(0.72); // stub confidence
+        report.setConfidence(0.72);
         report.setRecommendation("Based on reported symptoms, we recommend consulting a " + specialty + " at the earliest.");
         report.setRiskFactors(req.getSymptoms() != null && !req.getSymptoms().isEmpty()
                 ? req.getSymptoms().subList(0, Math.min(3, req.getSymptoms().size()))

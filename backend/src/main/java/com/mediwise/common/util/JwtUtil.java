@@ -33,11 +33,12 @@ public class JwtUtil {
             keyBytes = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         }
         if (keyBytes.length < 32) {
-            keyBytes = java.util.Arrays.copyOf(keyBytes, 32);
+            throw new IllegalStateException(
+                    "application.jwt.secret is too short (" + keyBytes.length +
+                            " bytes). It must decode to at least 32 bytes (256 bits) for HS256.");
         }
         return Keys.hmacShaKeyFor(keyBytes);
     }
-
     public String generateAccessToken(String subject, Map<String, Object> claims) {
         return buildToken(subject, claims, accessExpiration);
     }
@@ -84,6 +85,14 @@ public class JwtUtil {
 
     public Object extractClaim(String token, String claimKey) {
         return parseClaims(token).getPayload().get(claimKey);
+    }
+    public boolean isRefreshToken(String token) {
+        Object type = extractClaim(token, "type");
+        return "refresh".equals(type);
+    }
+
+    public boolean isAccessToken(String token) {
+        return !isRefreshToken(token);
     }
 
     private Jws<Claims> parseClaims(String token) {

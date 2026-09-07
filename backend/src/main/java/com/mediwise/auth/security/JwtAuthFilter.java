@@ -4,8 +4,6 @@ import com.google.firebase.auth.FirebaseToken;
 import com.mediwise.auth.model.User;
 import com.mediwise.auth.repository.UserRepository;
 import com.mediwise.common.util.JwtUtil;
-import com.mediwise.profile.model.PatientProfile;
-import com.mediwise.profile.repository.PatientProfileRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,7 +31,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final FirebaseTokenVerifier firebaseTokenVerifier;
     private final UserRepository userRepository;
-    private final PatientProfileRepository patientProfileRepository;
 
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
@@ -56,7 +53,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Try verifying as MediWise internal JWT token
+        // 1. Try verifying as MediWise internal JWT token
         if (jwtUtil.isTokenValid(token)) {
             try {
                 String jti = jwtUtil.extractJti(token);
@@ -89,51 +86,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
 
-        // Fallback: Check if token is a direct Firebase ID token
+        // 2. Fallback: Check if token is a direct Firebase ID token
         try {
             FirebaseToken firebaseToken = firebaseTokenVerifier.verifyToken(token);
             String uid = firebaseToken.getUid();
             User user = userRepository.findByFirebaseUid(uid).orElse(null);
-
-            // If not found by UID, check by email and link
-            if (user == null) {
-                String email = firebaseTokenVerifier.extractEmail(firebaseToken);
-                if (email != null && !email.isBlank()) {
-                    user = userRepository.findByEmail(email).map(existingUser -> {
-                        existingUser.setFirebaseUid(uid);
-                        return userRepository.save(existingUser);
-                    }).orElse(null);
-                }
-            }
-
-            // If user still doesn't exist, auto-provision
-            if (user == null) {
-                String email = firebaseTokenVerifier.extractEmail(firebaseToken);
-                if (email != null && !email.isBlank()) {
-                    String name = firebaseTokenVerifier.extractName(firebaseToken);
-                    String phone = firebaseTokenVerifier.extractPhone(firebaseToken);
-                    String picture = firebaseTokenVerifier.extractPicture(firebaseToken);
-
-                    user = User.builder()
-                            .firebaseUid(uid)
-                            .email(email)
-                            .fullName(name != null ? name : "User")
-                            .phone(phone)
-                            .role(User.Role.PATIENT)
-                            .active(true)
-                            .build();
-                    user = userRepository.save(user);
-
-                    PatientProfile profile = PatientProfile.builder()
-                            .userId(user.getId())
-                            .fullName(user.getFullName())
-                            .profileImage(picture)
-                            .build();
-                    patientProfileRepository.save(profile);
-                    log.info("Auto-provisioned patient profile from Firebase token for {}", email);
-                }
-            }
-
             if (user != null && user.isActive()) {
                 var authentication = new UsernamePasswordAuthenticationToken(
                         user,

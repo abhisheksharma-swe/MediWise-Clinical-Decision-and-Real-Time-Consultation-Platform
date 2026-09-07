@@ -36,4 +36,5 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     long countByDoctorIdAndCreatedAtBetween(UUID doctorId, java.time.Instant start, java.time.Instant end);
 
     long countByDoctorIdAndStatusAndCreatedAtBetween(UUID doctorId, Appointment.AppointmentStatus status, java.time.Instant start, java.time.Instant end);
+    boolean existsByDoctorIdAndPatientId(UUID doctorId, UUID patientId);
 }

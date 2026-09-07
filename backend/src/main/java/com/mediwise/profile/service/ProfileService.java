@@ -49,6 +49,10 @@ public class ProfileService {
         return profileRepository.save(profile);
     }
 
+    private static final java.util.Set<String> ALLOWED_IMAGE_TYPES = java.util.Set.of(
+            "image/jpeg", "image/png", "image/webp", "image/gif"
+    );
+
     @Transactional
     public String uploadProfileImage(User user, MultipartFile file) {
         if (file.isEmpty()) {
@@ -56,11 +60,19 @@ public class ProfileService {
         }
 
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new BusinessException("INVALID_FILE_TYPE", "Only image files are allowed");
+        if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType.toLowerCase())) {
+            throw new BusinessException("INVALID_FILE_TYPE", "Only JPEG, PNG, WEBP, or GIF images are allowed");
         }
 
-        String key = "profiles/" + user.getId() + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+        String extension = switch (contentType.toLowerCase()) {
+            case "image/jpeg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            case "image/gif" -> ".gif";
+            default -> "";
+        };
+
+        String key = "profiles/" + user.getId() + "/" + UUID.randomUUID() + extension;
 
         try {
             ObjectMetadata metadata = new ObjectMetadata();

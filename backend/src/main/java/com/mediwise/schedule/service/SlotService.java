@@ -91,14 +91,11 @@ public class SlotService {
                 .orElseThrow(() -> new ResourceNotFoundException("Slot", slotId.toString()));
 
         if (redissonClient == null) {
-            if (slot.getStatus() != TimeSlot.SlotStatus.AVAILABLE) {
+            Instant expiresAt = Instant.now().plusSeconds(LOCK_TTL_MINUTES * 60);
+            int updated = slotRepository.tryLockSlot(slotId, user.getId(), expiresAt);
+            if (updated == 0) {
                 throw new SlotConflictException();
             }
-            Instant expiresAt = Instant.now().plusSeconds(LOCK_TTL_MINUTES * 60);
-            slot.setStatus(TimeSlot.SlotStatus.LOCKED);
-            slot.setLockedBy(user.getId());
-            slot.setLockedUntil(expiresAt);
-            slotRepository.save(slot);
 
             log.info("Slot {} locked by user {} (without distributed lock)", slotId, user.getId());
             return SlotLockResponse.builder()

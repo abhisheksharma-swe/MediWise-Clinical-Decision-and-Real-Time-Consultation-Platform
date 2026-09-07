@@ -1,9 +1,7 @@
 package com.mediwise.config;
 
-import com.mediwise.auth.security.JwtAccessDeniedHandler;
 import com.mediwise.auth.security.JwtAuthFilter;
-import com.mediwise.auth.security.JwtAuthenticationEntryPoint;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,12 +26,13 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthFilter jwtAuthFilter;
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private JwtAuthFilter jwtAuthFilter;
+
+    public SecurityConfig(@Autowired(required = false) JwtAuthFilter jwtAuthFilter) {
+        this.jwtAuthFilter = jwtAuthFilter;
+    }
 
     @Value("${application.cors.allowed-origins}")
     private String allowedOrigins;
@@ -51,14 +50,12 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                        .accessDeniedHandler(jwtAccessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/doctors", "/api/v1/doctors/**").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
@@ -66,8 +63,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/analytics/**").hasAnyRole("DOCTOR", "ADMIN")
                         .requestMatchers("/api/v1/doctors/*/schedule/**").hasAnyRole("DOCTOR", "ADMIN")
                         .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                );
+
+        // 👇 ADD FILTER ONLY IF AVAILABLE
+        if (jwtAuthFilter != null) {
+            http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        }
 
         return http.build();
     }

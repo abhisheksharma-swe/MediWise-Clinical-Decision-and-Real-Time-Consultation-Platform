@@ -17,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +33,7 @@ public class DoctorService {
 
     @Cacheable(value = "doctor_list", key = "#search + '_' + #specialty + '_' + #sortBy + '_' + #page + '_' + #size")
     public Page<DoctorResponse> getDoctors(String search, String specialty,
-                                            String sortBy, int page, int size) {
+                                           String sortBy, int page, int size) {
         Sort sort = resolveSort(sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
@@ -40,19 +41,37 @@ public class DoctorService {
         if (search != null && !search.isBlank()) {
             doctors = doctorRepository.search(search.trim(), pageable);
         } else if (specialty != null && !specialty.isBlank()) {
-            doctors = doctorRepository.findAll(
-                    DoctorSpecification.hasSpecialty(specialty), pageable);
+            Specification<Doctor> spec = Specification
+                    .where(DoctorSpecification.isVerified())
+                    .and(DoctorSpecification.hasSpecialty(specialty));
+            doctors = doctorRepository.findAll(spec, pageable);
         } else {
-            doctors = doctorRepository.findByAvailableTrue(pageable);
+            doctors = doctorRepository.findByAvailableTrueAndVerifiedTrue(pageable);
         }
 
         return doctors.map(DoctorResponse::from);
     }
 
-    public DoctorResponse getDoctorById(UUID id) {
+    public DoctorResponse getDoctorById(UUID id, User requester) {
         Doctor doctor = doctorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Doctor", id.toString()));
+
+        if (!doctor.isVerified() && !canViewUnverifiedDoctor(doctor, requester)) {
+            throw new ResourceNotFoundException("Doctor", id.toString());
+        }
+
         return DoctorResponse.from(doctor);
+    }
+
+    private boolean canViewUnverifiedDoctor(Doctor doctor, User requester) {
+        if (requester == null) {
+            return false;
+        }
+        if (requester.getRole() == User.Role.ADMIN) {
+            return true;
+        }
+        return requester.getRole() == User.Role.DOCTOR
+                && doctor.getUserId().equals(requester.getId());
     }
 
     @CacheEvict(value = "doctor_list", allEntries = true)

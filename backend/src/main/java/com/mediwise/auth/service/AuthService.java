@@ -3,6 +3,7 @@ package com.mediwise.auth.service;
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
 import com.mediwise.auth.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import com.mediwise.auth.security.FirebaseTokenVerifier;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.ResourceNotFoundException;
@@ -42,6 +43,9 @@ public class AuthService {
 
     private static final long REFRESH_EXPIRY_DAYS = 7;
     private static final long ACCESS_EXPIRY_SECONDS = 900;
+
+    @Value("${spring.profiles.active:local}")
+    private String activeProfile;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -132,26 +136,24 @@ public class AuthService {
             String firebaseName = firebaseTokenVerifier.extractName(firebaseToken);
             String firebasePicture = firebaseTokenVerifier.extractPicture(firebaseToken);
             String firebasePhone = firebaseTokenVerifier.extractPhone(firebaseToken);
+            boolean firebaseEmailVerified = firebaseTokenVerifier.isEmailVerified(firebaseToken);
 
             var userOpt = userRepository.findByFirebaseUid(firebaseUid);
+
             if (userOpt.isEmpty() && firebaseEmail != null && !firebaseEmail.isBlank()) {
-                userOpt = userRepository.findByEmail(firebaseEmail).map(existingUser -> {
+                var emailMatch = userRepository.findByEmail(firebaseEmail);
+                if (emailMatch.isPresent()) {
+                    if (!firebaseEmailVerified) {
+                        throw new UnauthorizedException(
+                                "An account with this email already exists. Please verify your email with your identity provider before signing in this way, or log in with your password instead.");
+                    }
+                    User existingUser = emailMatch.get();
                     if (existingUser.getFirebaseUid() == null || !existingUser.getFirebaseUid().equals(firebaseUid)) {
                         existingUser.setFirebaseUid(firebaseUid);
-                        return userRepository.save(existingUser);
+                        existingUser = userRepository.save(existingUser);
                     }
-                    return existingUser;
-                });
-            }
-
-            if (userOpt.isEmpty() && request.getEmailOrPhone() != null && !request.getEmailOrPhone().isBlank()) {
-                userOpt = userRepository.findByIdentifier(request.getEmailOrPhone().trim()).map(existingUser -> {
-                    if (existingUser.getFirebaseUid() == null) {
-                        existingUser.setFirebaseUid(firebaseUid);
-                        return userRepository.save(existingUser);
-                    }
-                    return existingUser;
-                });
+                    userOpt = Optional.of(existingUser);
+                }
             }
 
             if (userOpt.isPresent()) {
@@ -208,6 +210,10 @@ public class AuthService {
             throw new UnauthorizedException("Invalid or expired refresh token. Please log in again.");
         }
 
+        if (!jwtUtil.isRefreshToken(refreshToken)) {
+            throw new UnauthorizedException("Provided token is not a refresh token.");
+        }
+
         String jti = jwtUtil.extractJti(refreshToken);
         if (redisTemplate != null && jti != null) {
             Boolean isBlacklisted = (Boolean) redisTemplate.opsForValue().get("blacklist:" + jti);
@@ -222,6 +228,16 @@ public class AuthService {
 
         if (!user.isActive()) {
             throw new UnauthorizedException("Your account has been suspended.");
+        }
+
+        // Rotation: blacklist the OLD refresh token now that a new pair is being issued,
+        // so it can never be reused even if it was copied/stolen.
+        if (redisTemplate != null && jti != null) {
+            Date expiration = jwtUtil.extractExpiration(refreshToken);
+            long remaining = expiration != null ? expiration.getTime() - System.currentTimeMillis() : 0;
+            if (remaining > 0) {
+                redisTemplate.opsForValue().set("blacklist:" + jti, true, Duration.ofMillis(remaining));
+            }
         }
 
         return buildAuthResponse(user);
@@ -284,7 +300,7 @@ public class AuthService {
                 .appName("MediWise")
                 .version("1.0.0")
                 .status("HEALTHY")
-                .environment("production")
+                .environment(activeProfile)
                 .features(List.of(
                         "auth_email_password",
                         "auth_firebase_google",

@@ -18,11 +18,10 @@ public interface DoctorRepository extends JpaRepository<Doctor, UUID>,
 
     Optional<Doctor> findByUserId(UUID userId);
 
-    Page<Doctor> findByAvailableTrue(Pageable pageable);
-
-    @Query("SELECT d FROM Doctor d WHERE " +
+    Page<Doctor> findByAvailableTrueAndVerifiedTrue(Pageable pageable);
+    @Query("SELECT d FROM Doctor d WHERE d.verified = true AND (" +
             "LOWER(d.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(d.specialty) LIKE LOWER(CONCAT('%', :search, '%'))")
+            "LOWER(d.specialty) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Doctor> search(@Param("search") String search, Pageable pageable);
 
     boolean existsByUserId(UUID userId);

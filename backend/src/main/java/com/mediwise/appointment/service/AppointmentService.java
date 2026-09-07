@@ -57,6 +57,13 @@ public class AppointmentService {
                     return patientProfileRepository.save(newProfile);
                 });
 
+        Doctor doctor = doctorRepository.findById(request.getDoctorId())
+                .orElseThrow(() -> new ResourceNotFoundException("Doctor", request.getDoctorId().toString()));
+
+        if (!doctor.isVerified()) {
+            throw new BusinessException("DOCTOR_NOT_VERIFIED", "This doctor is not yet verified and cannot be booked.");
+        }
+
         TimeSlot slot = slotRepository.findById(request.getSlotId())
                 .orElseThrow(() -> new ResourceNotFoundException("Slot", request.getSlotId().toString()));
 
@@ -122,6 +129,9 @@ public class AppointmentService {
     public AppointmentResponse getAppointmentById(UUID id, User user) {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
+
+        assertCanAccessAppointment(appointment, user);
+
         return buildAppointmentResponse(appointment);
     }
 
@@ -131,6 +141,8 @@ public class AppointmentService {
     public AppointmentResponse cancelAppointment(UUID id, User user, CancelRequest request) {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
+
+        assertCanAccessAppointment(appointment, user);
 
         if (appointment.getStatus() == Appointment.AppointmentStatus.COMPLETED ||
                 appointment.getStatus() == Appointment.AppointmentStatus.CANCELLED) {
@@ -229,6 +241,24 @@ public class AppointmentService {
 
     // ── Private Helpers ───────────────────────────────────────────────────────
 
+    private void assertCanAccessAppointment(Appointment appointment, User user) {
+        if (user.getRole() == User.Role.ADMIN) {
+            return;
+        }
+        if (user.getRole() == User.Role.DOCTOR) {
+            UUID doctorId = getDoctorIdForUser(user);
+            if (appointment.getDoctorId().equals(doctorId)) {
+                return;
+            }
+        } else {
+            var patientOpt = patientProfileRepository.findByUserId(user.getId());
+            if (patientOpt.isPresent() && appointment.getPatientId().equals(patientOpt.get().getId())) {
+                return;
+            }
+        }
+        throw new BusinessException("FORBIDDEN", "You do not have access to this appointment.");
+    }
+
     /**
      * Resolves a comma-separated status string ("PENDING,CONFIRMED") into a list of enums.
      * Invalid values are silently ignored (tolerant parsing for Android query params).
@@ -247,9 +277,6 @@ public class AppointmentService {
     /**
      * A doctor logs in as a User (ROLE_DOCTOR). Their Doctor profile carries the
      * doctorId referenced on appointments. This resolves that mapping.
-     *
-     * INTERVIEW NOTE: This is why we keep User and Doctor as separate entities —
-     * User handles auth, Doctor handles medical domain data.
      */
     private UUID getDoctorIdForUser(User user) {
         return doctorRepository.findByUserId(user.getId())
