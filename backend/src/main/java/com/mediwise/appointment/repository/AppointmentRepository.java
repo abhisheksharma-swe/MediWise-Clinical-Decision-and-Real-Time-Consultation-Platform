@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Repository
@@ -28,13 +29,25 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
             UUID doctorId, java.util.Collection<Appointment.AppointmentStatus> statuses, Pageable pageable);
 
     @Query("SELECT COUNT(a) FROM Appointment a WHERE a.doctorId = :doctorId " +
-           "AND a.status IN ('PENDING','CONFIRMED','IN_PROGRESS')")
+            "AND a.status IN ('PENDING','CONFIRMED','IN_PROGRESS')")
     long countActiveByDoctorId(@Param("doctorId") UUID doctorId);
 
     long countByStatus(Appointment.AppointmentStatus status);
 
-    long countByDoctorIdAndCreatedAtBetween(UUID doctorId, java.time.Instant start, java.time.Instant end);
-
-    long countByDoctorIdAndStatusAndCreatedAtBetween(UUID doctorId, Appointment.AppointmentStatus status, java.time.Instant start, java.time.Instant end);
     boolean existsByDoctorIdAndPatientId(UUID doctorId, UUID patientId);
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE (:doctorId IS NULL OR a.doctorId = :doctorId) " +
+            "AND a.createdAt BETWEEN :start AND :end")
+    long countByDoctorIdAndCreatedAtBetween(
+            @Param("doctorId") UUID doctorId,
+            @Param("start") Instant start,
+            @Param("end") Instant end);
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE (:doctorId IS NULL OR a.doctorId = :doctorId) " +
+            "AND a.status = :status AND a.createdAt BETWEEN :start AND :end")
+    long countByDoctorIdAndStatusAndCreatedAtBetween(
+            @Param("doctorId") UUID doctorId,
+            @Param("status") Appointment.AppointmentStatus status,
+            @Param("start") Instant start,
+            @Param("end") Instant end);
 }

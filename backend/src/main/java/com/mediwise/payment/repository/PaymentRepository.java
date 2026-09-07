@@ -19,7 +19,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @org.springframework.data.jpa.repository.Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'SUCCESS' AND p.createdAt >= :start")
     java.math.BigDecimal sumSuccessfulPaymentsSince(@org.springframework.data.repository.query.Param("start") java.time.Instant start);
 
-    @org.springframework.data.jpa.repository.Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'SUCCESS' AND p.appointmentId IN (SELECT a.id FROM Appointment a WHERE a.doctorId = :doctorId) AND p.createdAt BETWEEN :start AND :end")
+    @org.springframework.data.jpa.repository.Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status = 'SUCCESS' AND p.appointmentId IN (SELECT a.id FROM Appointment a WHERE (:doctorId IS NULL OR a.doctorId = :doctorId)) AND p.createdAt BETWEEN :start AND :end")
     java.math.BigDecimal sumByDoctorIdAndDateRange(@org.springframework.data.repository.query.Param("doctorId") UUID doctorId, @org.springframework.data.repository.query.Param("start") java.time.Instant start, @org.springframework.data.repository.query.Param("end") java.time.Instant end);
 
     long countByStatus(Payment.PaymentStatus status);

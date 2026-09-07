@@ -2,6 +2,8 @@ package com.mediwise.notification.service;
 
 import com.google.firebase.messaging.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,9 +13,20 @@ import java.util.Map;
 @Service
 public class FirebasePushService {
 
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
+
     public void sendToUser(java.util.UUID userId, String title, String body) {
-        // TODO: Retrieve FCM token for user and send
-        log.info("Mock FCM push to user {}: {} - {}", userId, title, body);
+        if (redisTemplate == null) {
+            log.debug("Redis unavailable — skipping FCM push to user {}", userId);
+            return;
+        }
+        String fcmToken = (String) redisTemplate.opsForValue().get("fcm_token:" + userId);
+        if (fcmToken == null || fcmToken.isBlank()) {
+            log.debug("No FCM token registered for user {} — skipping push", userId);
+            return;
+        }
+        sendToToken(fcmToken, title, body, Map.of());
     }
 
     public void sendToToken(String fcmToken, String title, String body, Map<String, String> data) {

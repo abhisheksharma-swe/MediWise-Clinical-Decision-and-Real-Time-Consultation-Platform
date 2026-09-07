@@ -3,6 +3,8 @@ package com.mediwise.analytics.service;
 import com.mediwise.analytics.dto.AppointmentAnalyticsResponse;
 import com.mediwise.analytics.dto.DashboardStatsResponse;
 import com.mediwise.appointment.repository.AppointmentRepository;
+import com.mediwise.auth.model.User;
+import com.mediwise.common.exception.UnauthorizedException;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.notification.repository.NotificationRepository;
 import com.mediwise.payment.repository.PaymentRepository;
@@ -14,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.Instant;
@@ -93,5 +94,22 @@ public class AnalyticsService {
                 .dailyCounts(dailyCounts)
                 .topDoctors(List.of()) // populated separately via JPQL in future iteration
                 .build();
+    }
+
+    public UUID resolveDoctorIdForRequest(User user, UUID requestedDoctorId) {
+        if (user.getRole() == User.Role.ADMIN) {
+            return requestedDoctorId; // admin may query any doctor, or null for all
+        }
+
+        // DOCTOR: always scoped to their own doctorId
+        UUID ownDoctorId = doctorRepository.findByUserId(user.getId())
+                .map(d -> d.getId())
+                .orElseThrow(() -> new UnauthorizedException("No doctor profile found for this user."));
+
+        if (requestedDoctorId != null && !requestedDoctorId.equals(ownDoctorId)) {
+            throw new UnauthorizedException("You may only view analytics for your own appointments.");
+        }
+
+        return ownDoctorId;
     }
 }

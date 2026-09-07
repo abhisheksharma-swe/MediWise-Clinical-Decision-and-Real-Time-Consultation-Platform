@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import com.mediwise.notification.dto.FcmTokenRequest;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -66,9 +67,9 @@ public class NotificationController {
     @Operation(summary = "Register FCM device token")
     public ResponseEntity<ApiResponse<Void>> registerToken(
             @AuthenticationPrincipal User user,
-            @RequestBody String fcmToken) {
-        if (redisTemplate != null) {
-            redisTemplate.opsForValue().set("fcm_token:" + user.getId(), fcmToken);
+            @RequestBody FcmTokenRequest request) {
+        if (redisTemplate != null && request.getFcmToken() != null && !request.getFcmToken().isBlank()) {
+            redisTemplate.opsForValue().set("fcm_token:" + user.getId(), request.getFcmToken());
         }
         return ResponseEntity.ok(ApiResponse.message("FCM token registered"));
     }

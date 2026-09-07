@@ -11,6 +11,8 @@ import com.mediwise.payment.dto.PaymentResponse;
 import com.mediwise.payment.dto.VerifyPaymentRequest;
 import com.mediwise.payment.model.Payment;
 import com.mediwise.payment.repository.PaymentRepository;
+import com.mediwise.profile.model.PatientProfile;
+import com.mediwise.profile.repository.PatientProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,8 @@ class RazorpayServiceTest {
         private AppointmentRepository appointmentRepository;
         @Mock
         private DoctorRepository doctorRepository;
+        @Mock
+        private PatientProfileRepository patientProfileRepository;
 
         @InjectMocks
         private RazorpayService razorpayService;
@@ -64,6 +68,7 @@ class RazorpayServiceTest {
         private static final String TEST_WEBHOOK_SECRET = "test_webhook_secret_abc";
 
         private UUID patientId;
+        private UUID patientProfileId;
         private UUID doctorId;
         private UUID appointmentId;
         private Appointment pendingAppointment;
@@ -76,23 +81,36 @@ class RazorpayServiceTest {
                 ReflectionTestUtils.setField(razorpayService, "webhookSecret", TEST_WEBHOOK_SECRET);
 
                 patientId = UUID.randomUUID();
+                patientProfileId = UUID.randomUUID();
                 doctorId = UUID.randomUUID();
                 appointmentId = UUID.randomUUID();
 
                 doctor = Doctor.builder()
-                                .id(doctorId)
-                                .fullName("Dr. Smith")
-                                .consultationFee(new BigDecimal("500.00"))
-                                .verified(true)
-                                .build();
+                        .id(doctorId)
+                        .fullName("Dr. Smith")
+                        .consultationFee(new BigDecimal("500.00"))
+                        .verified(true)
+                        .build();
 
+                // patientId (the appointment owner) matches patientProfileId so the
+                // ownership check in initiatePayment() passes for the "legit owner" tests
                 pendingAppointment = Appointment.builder()
-                                .id(appointmentId)
-                                .patientId(UUID.randomUUID())
-                                .doctorId(doctorId)
-                                .slotId(UUID.randomUUID())
-                                .status(Appointment.AppointmentStatus.PENDING)
-                                .build();
+                        .id(appointmentId)
+                        .patientId(patientProfileId)
+                        .doctorId(doctorId)
+                        .slotId(UUID.randomUUID())
+                        .status(Appointment.AppointmentStatus.PENDING)
+                        .build();
+        }
+
+        // Helper — stub the patient owning this appointment (used by initiatePayment tests)
+        private void stubOwningPatient() {
+                PatientProfile profile = PatientProfile.builder()
+                        .id(patientProfileId)
+                        .userId(patientId)
+                        .build();
+                when(patientProfileRepository.findByUserId(patientId))
+                        .thenReturn(Optional.of(profile));
         }
 
         // ─────────────────────────────────────────────────────────────────────────
@@ -102,30 +120,32 @@ class RazorpayServiceTest {
         @DisplayName("initiatePayment: creates Razorpay order using server-authoritative fee")
         void initiatePayment_usesServerFeeNotClientSupplied() throws Exception {
                 // Arrange
+                stubOwningPatient();
+
                 InitiatePaymentRequest request = new InitiatePaymentRequest();
                 request.setAppointmentId(appointmentId);
                 // Note: NO amount field — the whole security point of the redesign
 
                 when(appointmentRepository.findById(appointmentId))
-                                .thenReturn(Optional.of(pendingAppointment));
+                        .thenReturn(Optional.of(pendingAppointment));
                 when(doctorRepository.findById(doctorId))
-                                .thenReturn(Optional.of(doctor));
+                        .thenReturn(Optional.of(doctor));
                 when(paymentRepository.findByAppointmentIdAndStatus(appointmentId, Payment.PaymentStatus.INITIATED))
-                                .thenReturn(Optional.empty());
+                        .thenReturn(Optional.empty());
 
                 // Gateway returns a fake Razorpay order ID (no real HTTP call)
                 when(razorpayOrderGateway.createOrder(eq(appointmentId), eq(new BigDecimal("500.00"))))
-                                .thenReturn("order_testABC123");
+                        .thenReturn("order_testABC123");
 
                 Payment savedPayment = Payment.builder()
-                                .id(UUID.randomUUID())
-                                .appointmentId(appointmentId)
-                                .patientId(patientId)
-                                .amount(new BigDecimal("500.00"))
-                                .currency("INR")
-                                .status(Payment.PaymentStatus.INITIATED)
-                                .gatewayOrderId("order_testABC123")
-                                .build();
+                        .id(UUID.randomUUID())
+                        .appointmentId(appointmentId)
+                        .patientId(patientProfileId)
+                        .amount(new BigDecimal("500.00"))
+                        .currency("INR")
+                        .status(Payment.PaymentStatus.INITIATED)
+                        .gatewayOrderId("order_testABC123")
+                        .build();
                 when(paymentRepository.save(any(Payment.class))).thenReturn(savedPayment);
 
                 // Act
@@ -149,16 +169,18 @@ class RazorpayServiceTest {
         @Test
         @DisplayName("initiatePayment: throws BusinessException if appointment already CONFIRMED")
         void initiatePayment_rejectsAlreadyConfirmedAppointment() {
+                stubOwningPatient();
+
                 pendingAppointment.setStatus(Appointment.AppointmentStatus.CONFIRMED);
                 when(appointmentRepository.findById(appointmentId))
-                                .thenReturn(Optional.of(pendingAppointment));
+                        .thenReturn(Optional.of(pendingAppointment));
 
                 InitiatePaymentRequest request = new InitiatePaymentRequest();
                 request.setAppointmentId(appointmentId);
 
                 assertThatThrownBy(() -> razorpayService.initiatePayment(request, patientId))
-                                .isInstanceOf(BusinessException.class)
-                                .hasMessageContaining("already been paid");
+                        .isInstanceOf(BusinessException.class)
+                        .hasMessageContaining("already been paid");
 
                 // Gateway must never be called
                 verifyNoInteractions(razorpayOrderGateway);
@@ -181,19 +203,19 @@ class RazorpayServiceTest {
                 request.setRazorpaySignature(signature);
 
                 Payment initiatedPayment = Payment.builder()
-                                .id(UUID.randomUUID())
-                                .appointmentId(appointmentId)
-                                .patientId(patientId)
-                                .amount(new BigDecimal("500.00"))
-                                .status(Payment.PaymentStatus.INITIATED)
-                                .gatewayOrderId(orderId)
-                                .build();
+                        .id(UUID.randomUUID())
+                        .appointmentId(appointmentId)
+                        .patientId(patientProfileId)
+                        .amount(new BigDecimal("500.00"))
+                        .status(Payment.PaymentStatus.INITIATED)
+                        .gatewayOrderId(orderId)
+                        .build();
 
                 when(paymentRepository.findByGatewayOrderId(orderId))
-                                .thenReturn(Optional.of(initiatedPayment));
+                        .thenReturn(Optional.of(initiatedPayment));
                 when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
                 when(appointmentRepository.findById(appointmentId))
-                                .thenReturn(Optional.of(pendingAppointment));
+                        .thenReturn(Optional.of(pendingAppointment));
                 when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 // Act
@@ -205,7 +227,7 @@ class RazorpayServiceTest {
                 // THE CRITICAL ASSERTION: Appointment must have been saved with CONFIRMED
                 // status
                 verify(appointmentRepository)
-                                .save(argThat(apt -> apt.getStatus() == Appointment.AppointmentStatus.CONFIRMED));
+                        .save(argThat(apt -> apt.getStatus() == Appointment.AppointmentStatus.CONFIRMED));
         }
 
         // ─────────────────────────────────────────────────────────────────────────
@@ -220,20 +242,20 @@ class RazorpayServiceTest {
                 request.setRazorpaySignature("i_am_a_hacker_this_is_fake_sig");
 
                 Payment initiatedPayment = Payment.builder()
-                                .id(UUID.randomUUID())
-                                .appointmentId(appointmentId)
-                                .status(Payment.PaymentStatus.INITIATED)
-                                .gatewayOrderId("order_real")
-                                .build();
+                        .id(UUID.randomUUID())
+                        .appointmentId(appointmentId)
+                        .status(Payment.PaymentStatus.INITIATED)
+                        .gatewayOrderId("order_real")
+                        .build();
 
                 when(paymentRepository.findByGatewayOrderId("order_real"))
-                                .thenReturn(Optional.of(initiatedPayment));
+                        .thenReturn(Optional.of(initiatedPayment));
                 when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 // Act & Assert
                 assertThatThrownBy(() -> razorpayService.verifyAndConfirmPayment(request))
-                                .isInstanceOf(PaymentException.class)
-                                .hasMessageContaining("verification failed");
+                        .isInstanceOf(PaymentException.class)
+                        .hasMessageContaining("verification failed");
 
                 // Appointment must NEVER be confirmed
                 verify(appointmentRepository, never()).save(any());
@@ -248,25 +270,27 @@ class RazorpayServiceTest {
         @Test
         @DisplayName("initiatePayment: reuses existing Razorpay order on retry instead of creating new one")
         void initiatePayment_returnsExistingOrderOnRetry() throws Exception {
+                stubOwningPatient();
+
                 InitiatePaymentRequest request = new InitiatePaymentRequest();
                 request.setAppointmentId(appointmentId);
 
                 when(appointmentRepository.findById(appointmentId))
-                                .thenReturn(Optional.of(pendingAppointment));
+                        .thenReturn(Optional.of(pendingAppointment));
                 when(doctorRepository.findById(doctorId))
-                                .thenReturn(Optional.of(doctor));
+                        .thenReturn(Optional.of(doctor));
 
                 // Simulate: user already started payment, Razorpay order already created
                 Payment existingPayment = Payment.builder()
-                                .id(UUID.randomUUID())
-                                .appointmentId(appointmentId)
-                                .amount(new BigDecimal("500.00"))
-                                .status(Payment.PaymentStatus.INITIATED)
-                                .gatewayOrderId("order_existing_XYZ")
-                                .retryCount(1)
-                                .build();
+                        .id(UUID.randomUUID())
+                        .appointmentId(appointmentId)
+                        .amount(new BigDecimal("500.00"))
+                        .status(Payment.PaymentStatus.INITIATED)
+                        .gatewayOrderId("order_existing_XYZ")
+                        .retryCount(1)
+                        .build();
                 when(paymentRepository.findByAppointmentIdAndStatus(appointmentId, Payment.PaymentStatus.INITIATED))
-                                .thenReturn(Optional.of(existingPayment));
+                        .thenReturn(Optional.of(existingPayment));
                 when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 // Act
@@ -287,8 +311,8 @@ class RazorpayServiceTest {
                 String data = orderId + "|" + paymentId;
                 Mac mac = Mac.getInstance("HmacSHA256");
                 mac.init(new SecretKeySpec(
-                                TEST_KEY_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+                        TEST_KEY_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
                 return HexFormat.of().formatHex(
-                                mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
+                        mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
         }
 }
