@@ -21,15 +21,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.mediwise.presentation.components.*
 import com.mediwise.presentation.navigation.Screen
+import com.mediwise.presentation.navigation.navigateToMainTab
 import com.mediwise.presentation.theme.*
+
+private val mainTabRoutes = setOf(
+    Screen.Home.route, Screen.DoctorList.route, Screen.Appointments.route, Screen.Profile.route
+)
+
+private fun NavController.navigateFromHome(route: String) {
+    if (route in mainTabRoutes) navigateToMainTab(route) else navigate(route)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
+    refreshTick: Int = 0,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(refreshTick) {
+        if (refreshTick != 0) viewModel.refresh()
+    }
 
     Scaffold(
         topBar = {
@@ -49,13 +63,12 @@ fun HomeScreen(
                             Icon(Icons.Default.Notifications, "Notifications")
                         }
                     }
-                    IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
+                    IconButton(onClick = { navController.navigateFromHome(Screen.Profile.route) }) {
                         Icon(Icons.Default.Person, "Profile")
                     }
                 }
             )
-        },
-        bottomBar = { ClinicalBottomBar(navController, Screen.Home.route) }
+        }
     ) { padding ->
         if (uiState.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -113,7 +126,7 @@ fun HomeScreen(
                 ) {
                     items(quickActions) { action ->
                         QuickActionCard(action) {
-                            navController.navigate(action.route)
+                            navController.navigateFromHome(action.route)
                         }
                     }
                 }
@@ -123,7 +136,7 @@ fun HomeScreen(
             item {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Upcoming Appointments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { navController.navigate(Screen.Appointments.route) }) {
+                    TextButton(onClick = { navController.navigateFromHome(Screen.Appointments.route) }) {
                         Text("See all", color = PrimaryBlue)
                     }
                 }
@@ -148,7 +161,7 @@ fun HomeScreen(
             item {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Top Doctors", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { navController.navigate(Screen.DoctorList.route) }) {
+                    TextButton(onClick = { navController.navigateFromHome(Screen.DoctorList.route) }) {
                         Text("See all", color = PrimaryBlue)
                     }
                 }

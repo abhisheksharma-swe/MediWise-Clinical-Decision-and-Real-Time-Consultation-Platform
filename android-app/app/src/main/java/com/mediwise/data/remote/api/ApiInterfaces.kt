@@ -4,6 +4,9 @@ import com.mediwise.data.remote.dto.*
 import retrofit2.http.*
 
 interface AuthApi {
+    @GET("api/v1/auth/config")
+    suspend fun getAppConfig(): ApiResponseDto<AppConfigDto>
+
     @POST("api/v1/auth/register")
     suspend fun register(@Body request: RegisterRequestDto): ApiResponseDto<AuthResponseDto>
 
@@ -13,8 +16,20 @@ interface AuthApi {
     @POST("api/v1/auth/refresh")
     suspend fun refresh(@Header("X-Refresh-Token") refreshToken: String): ApiResponseDto<AuthResponseDto>
 
+    @POST("api/v1/auth/forgot-password")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequestDto): ApiResponseDto<Unit>
+
+    @POST("api/v1/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequestDto): ApiResponseDto<Unit>
+
+    @GET("api/v1/auth/me")
+    suspend fun getCurrentUser(): ApiResponseDto<UserInfoDto>
+
+    @POST("api/v1/auth/change-password")
+    suspend fun changePassword(@Body request: ChangePasswordRequestDto): ApiResponseDto<Unit>
+
     @POST("api/v1/auth/logout")
-    suspend fun logout(@Header("Authorization") authHeader: String): ApiResponseDto<Unit>
+    suspend fun logout(@Header("Authorization") authHeader: String? = null): ApiResponseDto<Unit>
 }
 
 interface DoctorApi {
@@ -110,5 +125,16 @@ interface SlotApi {
 
     @DELETE("api/v1/slots/{slotId}/lock")
     suspend fun releaseSlot(@Path("slotId") slotId: String): ApiResponseDto<Unit>
+}
+
+interface AiApi {
+    @POST("api/v1/ai/symptom-log")
+    suspend fun logSymptoms(@Body request: SymptomLogRequestDto): ApiResponseDto<AiReportDto>
+
+    @GET("api/v1/ai/reports/{patientId}/latest")
+    suspend fun getLatestReport(@Path("patientId") patientId: String): ApiResponseDto<AiReportDto>
+
+    @GET("api/v1/ai/reports/{patientId}")
+    suspend fun getReportsForPatient(@Path("patientId") patientId: String): ApiResponseDto<List<AiReportDto>>
 }
 

@@ -30,10 +30,17 @@ import com.mediwise.presentation.theme.*
 @Composable
 fun DoctorListScreen(
     onDoctorClick: (String) -> Unit,
-    onBackClick: () -> Unit,
+    refreshTick: Int = 0,
     viewModel: DoctorViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(refreshTick) {
+        if (refreshTick != 0) {
+            viewModel.loadDoctors()
+            viewModel.loadFavorites()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -44,11 +51,6 @@ fun DoctorListScreen(
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
                 },
                 actions = {
                     IconButton(onClick = { /* open filter sheet */ }) {

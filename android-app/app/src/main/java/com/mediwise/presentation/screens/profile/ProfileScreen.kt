@@ -38,14 +38,15 @@ fun ProfileScreen(
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    refreshTick: Int = 0,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val profile = uiState.profile
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        viewModel.loadProfile()
+    LaunchedEffect(refreshTick) {
+        if (refreshTick != 0) viewModel.loadProfile()
     }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(

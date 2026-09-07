@@ -32,7 +32,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun ScheduleScreen(
     doctorId: String,
-    doctorName: String,
     onBackClick: () -> Unit,
     onSlotSelected: (date: String, time: String) -> Unit,
     viewModel: ScheduleViewModel = hiltViewModel()
@@ -45,6 +44,10 @@ fun ScheduleScreen(
         viewModel.loadSlotsForDate(selectedDate, doctorId)
     }
 
+    LaunchedEffect(doctorId) {
+        viewModel.loadDoctorName(doctorId)
+    }
+
     var selectedSlotModel by remember { mutableStateOf<com.mediwise.domain.model.SlotModel?>(null) }
 
     Scaffold(
@@ -54,7 +57,11 @@ fun ScheduleScreen(
                     Column {
                         Text("Book Appointment", fontWeight = FontWeight.Bold,
                             fontSize = 16.sp, color = TextPrimary)
-                        Text("Dr. $doctorName", fontSize = 12.sp, color = TextSecondary)
+                        Text(
+                            uiState.doctorName.ifBlank { null }?.let { "Dr. $it" } ?: "Loading...",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
                     }
                 },
                 navigationIcon = {

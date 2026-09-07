@@ -81,3 +81,14 @@ data class SlotLockResult(
     val ttlMinutes: Long
 )
 
+data class AiTriageReport(
+    val id: String = "",
+    val patientId: String = "",
+    val urgencyScore: Int = 0,
+    val suggestedSpecialty: String = "",
+    val confidence: Double = 0.0,
+    val recommendation: String = "",
+    val riskFactors: List<String> = emptyList(),
+    val createdAt: String = ""
+)
+

@@ -3,6 +3,7 @@ package com.mediwise.core.di
 import com.mediwise.BuildConfig
 import com.mediwise.core.network.AuthInterceptor
 import com.mediwise.core.network.ErrorInterceptor
+import com.mediwise.core.network.TokenAuthenticator
 import com.mediwise.data.remote.api.*
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -30,11 +31,13 @@ object NetworkModule {
     @Provides @Singleton
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
-        errorInterceptor: ErrorInterceptor
+        errorInterceptor: ErrorInterceptor,
+        tokenAuthenticator: TokenAuthenticator
     ): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .addInterceptor(errorInterceptor)
+            .authenticator(tokenAuthenticator)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG)
                     HttpLoggingInterceptor.Level.BODY
@@ -64,4 +67,5 @@ object NetworkModule {
     @Provides @Singleton fun provideNotificationApi(r: Retrofit): NotificationApi = r.create(NotificationApi::class.java)
     @Provides @Singleton fun provideChatApi(r: Retrofit): ChatApi = r.create(ChatApi::class.java)
     @Provides @Singleton fun provideSlotApi(r: Retrofit): SlotApi = r.create(SlotApi::class.java)
+    @Provides @Singleton fun provideAiApi(r: Retrofit): AiApi = r.create(AiApi::class.java)
 }

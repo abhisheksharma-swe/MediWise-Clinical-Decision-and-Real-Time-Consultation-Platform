@@ -26,23 +26,20 @@ enum class AppointmentTab { Upcoming, Past, Cancelled }
 @Composable
 fun AppointmentListScreen(
     onAppointmentClick: (String) -> Unit,
-    onBackClick: () -> Unit,
+    refreshTick: Int = 0,
     viewModel: AppointmentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedTab = AppointmentTab.entries.firstOrNull { it.name == uiState.selectedStatus } ?: AppointmentTab.Upcoming
 
-
+    LaunchedEffect(refreshTick) {
+        if (refreshTick != 0) viewModel.loadAppointments()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("My Appointments", fontWeight = FontWeight.Bold, color = TextPrimary) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundWhite)
             )
         },

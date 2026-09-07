@@ -17,30 +17,19 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mediwise.domain.model.Notification
 import com.mediwise.presentation.theme.*
-
-data class NotificationItem(
-    val id: String,
-    val title: String,
-    val body: String,
-    val type: String,
-    val timeAgo: String,
-    val isRead: Boolean
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationScreen(onBackClick: () -> Unit) {
-    val notifications = remember {
-        mutableStateListOf(
-            NotificationItem("1", "Appointment Confirmed", "Your appointment with Dr. Sarah Johnson on Apr 29 at 10:00 AM is confirmed.", "APPOINTMENT_CONFIRMED", "2 min ago", false),
-            NotificationItem("2", "Payment Successful", "Payment of ₹800 for your consultation has been received.", "PAYMENT_SUCCESS", "1 hr ago", false),
-            NotificationItem("3", "New Message", "Dr. Raj Patel sent you a message.", "CHAT_MESSAGE", "3 hr ago", true),
-            NotificationItem("4", "Appointment Reminder", "You have a consultation with Dr. Sarah Johnson tomorrow at 10:00 AM.", "APPOINTMENT_REMINDER", "1 day ago", true),
-            NotificationItem("5", "Health Tip", "Stay hydrated! Aim for 8 glasses of water daily for optimal health.", "HEALTH_TIP", "2 days ago", true),
-        )
-    }
-
+fun NotificationScreen(
+    onBackClick: () -> Unit,
+    viewModel: NotificationViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val notifications = uiState.notifications
     val unreadCount = notifications.count { !it.isRead }
 
     Scaffold(
@@ -75,9 +64,7 @@ fun NotificationScreen(onBackClick: () -> Unit) {
                 },
                 actions = {
                     if (unreadCount > 0) {
-                        TextButton(onClick = {
-                            notifications.replaceAll { it.copy(isRead = true) }
-                        }) {
+                        TextButton(onClick = { viewModel.markAllRead() }) {
                             Text("Mark all read", color = PrimaryBlue, fontSize = 13.sp)
                         }
                     }
@@ -87,32 +74,57 @@ fun NotificationScreen(onBackClick: () -> Unit) {
         },
         containerColor = BackgroundWhite
     ) { padding ->
-        if (notifications.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.NotificationsOff, contentDescription = null,
-                        tint = TextSecondary.copy(alpha = 0.4f), modifier = Modifier.size(72.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text("No notifications yet", fontSize = 16.sp, color = TextSecondary)
+        when {
+            uiState.isLoading && notifications.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = PrimaryBlue)
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                items(notifications, key = { it.id }) { notif ->
-                    NotificationRow(
-                        notification = notif,
-                        onClick = {
-                            val idx = notifications.indexOf(notif)
-                            if (idx >= 0) notifications[idx] = notif.copy(isRead = true)
-                        }
-                    )
-                    HorizontalDivider(color = Divider)
+            uiState.error != null && notifications.isEmpty() -> {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(Icons.Default.ErrorOutline, contentDescription = null,
+                        tint = ErrorRed, modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(uiState.error ?: "Something went wrong", color = TextSecondary, fontSize = 14.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.loadNotifications() },
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                    ) { Text("Retry") }
+                }
+            }
+            notifications.isEmpty() -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.NotificationsOff, contentDescription = null,
+                            tint = TextSecondary.copy(alpha = 0.4f), modifier = Modifier.size(72.dp))
+                        Spacer(Modifier.height(16.dp))
+                        Text("No notifications yet", fontSize = 16.sp, color = TextSecondary)
+                    }
+                }
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    items(notifications, key = { it.id }) { notif ->
+                        NotificationRow(
+                            notification = notif,
+                            onClick = { viewModel.markRead(notif.id) }
+                        )
+                        HorizontalDivider(color = Divider)
+                    }
                 }
             }
         }
@@ -120,7 +132,7 @@ fun NotificationScreen(onBackClick: () -> Unit) {
 }
 
 @Composable
-private fun NotificationRow(notification: NotificationItem, onClick: () -> Unit) {
+private fun NotificationRow(notification: Notification, onClick: () -> Unit) {
     val (icon, iconColor) = notificationIcon(notification.type)
 
     Row(
@@ -171,7 +183,7 @@ private fun NotificationRow(notification: NotificationItem, onClick: () -> Unit)
             Spacer(Modifier.height(4.dp))
             Text(notification.body, fontSize = 13.sp, color = TextSecondary, lineHeight = 20.sp)
             Spacer(Modifier.height(6.dp))
-            Text(notification.timeAgo, fontSize = 11.sp, color = TextSecondary.copy(alpha = 0.7f))
+            Text(notification.time, fontSize = 11.sp, color = TextSecondary.copy(alpha = 0.7f))
         }
     }
 }

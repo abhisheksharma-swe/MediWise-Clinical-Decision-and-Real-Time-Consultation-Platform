@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediwise.core.result.Result
 import com.mediwise.domain.model.SlotModel
+import com.mediwise.domain.repository.DoctorRepository
 import com.mediwise.domain.usecase.schedule.GetSlotsUseCase
 import com.mediwise.domain.usecase.schedule.LockSlotUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,17 +22,28 @@ data class ScheduleUiState(
     val slots: List<SlotModel> = emptyList(),
     val isLocking: Boolean = false,
     val lockedSlotId: String? = null,
+    val doctorName: String = "",
     val error: String? = null
 )
 
 @HiltViewModel
 class ScheduleViewModel @Inject constructor(
     private val getSlotsUseCase: GetSlotsUseCase,
-    private val lockSlotUseCase: LockSlotUseCase
+    private val lockSlotUseCase: LockSlotUseCase,
+    private val doctorRepository: DoctorRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
+
+    fun loadDoctorName(doctorId: String) {
+        viewModelScope.launch {
+            when (val result = doctorRepository.getDoctorById(doctorId)) {
+                is Result.Success -> _uiState.update { it.copy(doctorName = result.data.fullName) }
+                else -> {}
+            }
+        }
+    }
 
     fun loadSlotsForDate(date: LocalDate, doctorId: String) {
         viewModelScope.launch {

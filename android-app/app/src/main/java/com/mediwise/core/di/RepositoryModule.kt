@@ -35,4 +35,7 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindSlotRepository(impl: SlotRepositoryImpl): SlotRepository
+
+    @Binds @Singleton
+    abstract fun bindAiRepository(impl: AiRepositoryImpl): AiRepository
 }

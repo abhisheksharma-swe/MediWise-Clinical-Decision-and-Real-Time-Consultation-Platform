@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.mediwise.presentation.theme.*
 import com.mediwise.domain.model.Doctor
 import com.mediwise.domain.model.Appointment
+import com.mediwise.presentation.navigation.navigateToMainTab
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -466,7 +467,11 @@ fun StatusChip(status: String) {
 
 // ── Bottom Navigation Bar ──────────────────────────────────────────────────
 @Composable
-fun ClinicalBottomBar(navController: androidx.navigation.NavController, currentRoute: String) {
+fun ClinicalBottomBar(
+    navController: androidx.navigation.NavController,
+    currentRoute: String,
+    onTabReselected: (String) -> Unit = {}
+) {
     val items = listOf(
         Triple("Home", "🏠", com.mediwise.presentation.navigation.Screen.Home.route),
         Triple("Doctors", "👨‍⚕️", com.mediwise.presentation.navigation.Screen.DoctorList.route),
@@ -479,11 +484,10 @@ fun ClinicalBottomBar(navController: androidx.navigation.NavController, currentR
             NavigationBarItem(
                 selected = currentRoute == route,
                 onClick = {
-                    if (currentRoute != route) {
-                        navController.navigate(route) {
-                            popUpTo(com.mediwise.presentation.navigation.Screen.Home.route)
-                            launchSingleTop = true
-                        }
+                    if (currentRoute == route) {
+                        onTabReselected(route)
+                    } else {
+                        navController.navigateToMainTab(route)
                     }
                 },
                 icon = { Text(icon, style = MaterialTheme.typography.titleMedium) },

@@ -7,6 +7,7 @@ import com.mediwise.domain.model.Appointment
 import com.mediwise.domain.model.Doctor
 import com.mediwise.core.result.onSuccess
 import com.mediwise.core.result.onError
+import com.mediwise.domain.repository.NotificationRepository
 import com.mediwise.domain.usecase.appointment.GetMyAppointmentsUseCase
 import com.mediwise.domain.usecase.doctor.GetDoctorsUseCase
 import com.mediwise.domain.usecase.profile.GetProfileUseCase
@@ -32,6 +33,7 @@ class HomeViewModel @Inject constructor(
     private val getDoctorsUseCase: GetDoctorsUseCase,
     private val getAppointmentsUseCase: GetMyAppointmentsUseCase,
     private val getProfileUseCase: GetProfileUseCase,
+    private val notificationRepository: NotificationRepository,
     private val sessionDataStore: SessionDataStore
 ) : ViewModel() {
 
@@ -62,6 +64,12 @@ class HomeViewModel @Inject constructor(
             // 3. Load upcoming appointments
             getAppointmentsUseCase(status = "PENDING,CONFIRMED", page = 0, size = 5)
                 .onSuccess { appts -> _uiState.update { it.copy(upcomingAppointments = appts) } }
+
+            // 4. Load unread notification count
+            notificationRepository.getNotifications(page = 0, size = 50)
+                .onSuccess { notifications ->
+                    _uiState.update { it.copy(unreadNotifications = notifications.count { n -> !n.isRead }) }
+                }
 
             _uiState.update { it.copy(isLoading = false) }
         }
