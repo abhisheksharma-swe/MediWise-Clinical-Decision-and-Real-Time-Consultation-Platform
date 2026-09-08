@@ -1,5 +1,6 @@
 package com.mediwise.ai.dto;
 
+import com.mediwise.doctor.dto.DoctorResponse;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -15,24 +16,21 @@ public class AiReportResponse {
     private UUID patientId;
     private UUID appointmentId;
 
-    /** e.g. "symptom_triage_v2" */
     private String modelName;
     private String modelVersion;
 
-    /** 0–100. Higher = more urgent */
     private int urgencyScore;
 
-    /** e.g. "Cardiology", "General Medicine" */
     private String suggestedSpecialty;
 
-    /** 0.0–1.0 */
     private double confidence;
 
-    /** Human-readable explanation from the model */
     private String recommendation;
 
-    /** Flagged risk factors */
     private List<String> riskFactors;
+
+    /** Verified doctors matching the suggested specialty — empty list if none found */
+    private List<DoctorResponse> matchedDoctors;
 
     private Instant createdAt;
 }
