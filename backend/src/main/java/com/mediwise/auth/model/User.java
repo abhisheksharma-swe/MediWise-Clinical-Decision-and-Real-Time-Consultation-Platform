@@ -46,6 +46,12 @@ public class User {
     @Builder.Default
     private boolean active = true;
 
+    @Column(name = "reset_token_hash")
+    private String resetTokenHash;
+
+    @Column(name = "reset_token_expiry")
+    private Instant resetTokenExpiry;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

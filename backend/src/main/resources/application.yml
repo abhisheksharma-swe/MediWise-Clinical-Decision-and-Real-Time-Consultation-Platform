@@ -4,8 +4,6 @@ spring:
 
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
 
   datasource:
@@ -37,7 +35,7 @@ spring:
       auto-index-creation: false
 
     redis:
-      enabled: false
+      enabled: true
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}

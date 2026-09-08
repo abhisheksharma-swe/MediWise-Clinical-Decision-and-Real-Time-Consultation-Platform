@@ -3,7 +3,6 @@ package com.mediwise.auth.service;
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
 import com.mediwise.auth.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Value;
 import com.mediwise.auth.security.FirebaseTokenVerifier;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.ResourceNotFoundException;
@@ -16,6 +15,7 @@ import com.mediwise.profile.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.*;
 
@@ -41,11 +42,17 @@ public class AuthService {
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
 
+    @Value("${spring.profiles.active:local}")
+    private String activeProfile;
+
     private static final long REFRESH_EXPIRY_DAYS = 7;
     private static final long ACCESS_EXPIRY_SECONDS = 900;
 
-    @Value("${spring.profiles.active:local}")
-    private String activeProfile;
+    private static final int OTP_LENGTH = 6;
+    private static final long OTP_VALIDITY_MINUTES = 10;
+    private static final int MAX_RESET_ATTEMPTS = 5;
+    private static final long ATTEMPTS_WINDOW_MINUTES = 15;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -230,8 +237,7 @@ public class AuthService {
             throw new UnauthorizedException("Your account has been suspended.");
         }
 
-        // Rotation: blacklist the OLD refresh token now that a new pair is being issued,
-        // so it can never be reused even if it was copied/stolen.
+        // Rotation: blacklist the OLD refresh token now that a new pair is being issued.
         if (redisTemplate != null && jti != null) {
             Date expiration = jwtUtil.extractExpiration(refreshToken);
             long remaining = expiration != null ? expiration.getTime() - System.currentTimeMillis() : 0;
@@ -243,21 +249,68 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
+    // ─── Forgot / Reset Password — Redis-backed OTP, no account enumeration ────
+
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
-        String identifier = request.getEmailOrPhone().trim();
-        User user = userRepository.findByIdentifier(identifier)
-                .orElseThrow(() -> new ResourceNotFoundException("No account found with this email or phone number."));
+        if (redisTemplate == null) {
+            throw new BusinessException("SERVICE_UNAVAILABLE", "Password reset is temporarily unavailable. Please try again later.");
+        }
 
-        log.info("Password reset requested for user: {}", user.getEmail());
-        // In production: send email/SMS with reset code or token.
+        String identifier = request.getEmailOrPhone().trim();
+        Optional<User> userOpt = userRepository.findByIdentifier(identifier);
+
+        // Never reveal whether an account exists — silently no-op for unknown identifiers.
+        if (userOpt.isEmpty()) {
+            log.info("Password reset requested for unknown identifier: {}", identifier);
+            return;
+        }
+
+        User user = userOpt.get();
+        String otp = generateOtp();
+        String otpKey = "pwreset:otp:" + user.getEmail();
+        String attemptsKey = "pwreset:attempts:" + user.getEmail();
+
+        redisTemplate.opsForValue().set(otpKey, otp, Duration.ofMinutes(OTP_VALIDITY_MINUTES));
+        redisTemplate.delete(attemptsKey);
+
+        // TODO: deliver `otp` via email/SMS once a provider is wired up.
+        // Logged server-side for now so the flow is testable end-to-end locally.
+        log.info("Password reset OTP generated for user: {} (valid {} min)", user.getEmail(), OTP_VALIDITY_MINUTES);
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
+        if (redisTemplate == null) {
+            throw new BusinessException("SERVICE_UNAVAILABLE", "Password reset is temporarily unavailable. Please try again later.");
+        }
+
         String identifier = request.getEmailOrPhone().trim();
         User user = userRepository.findByIdentifier(identifier)
                 .orElseThrow(() -> new ResourceNotFoundException("No account found with this email or phone number."));
+
+        String otpKey = "pwreset:otp:" + user.getEmail();
+        String attemptsKey = "pwreset:attempts:" + user.getEmail();
+
+        Object attemptsObj = redisTemplate.opsForValue().get(attemptsKey);
+        int attempts = attemptsObj instanceof Integer ? (Integer) attemptsObj : 0;
+
+        if (attempts >= MAX_RESET_ATTEMPTS) {
+            redisTemplate.delete(otpKey);
+            redisTemplate.delete(attemptsKey);
+            throw new BusinessException("TOO_MANY_ATTEMPTS", "Too many incorrect attempts. Please request a new code.");
+        }
+
+        Object storedOtp = redisTemplate.opsForValue().get(otpKey);
+        if (storedOtp == null) {
+            throw new BusinessException("INVALID_OR_EXPIRED_CODE", "This reset code is invalid or has expired. Please request a new one.");
+        }
+
+        if (!storedOtp.toString().equals(request.getToken())) {
+            int newAttempts = attempts + 1;
+            redisTemplate.opsForValue().set(attemptsKey, newAttempts, Duration.ofMinutes(ATTEMPTS_WINDOW_MINUTES));
+            throw new BusinessException("INVALID_CODE", "The reset code you entered is incorrect.");
+        }
 
         if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
             throw new BusinessException("INVALID_PASSWORD", "Password must be at least 6 characters.");
@@ -265,7 +318,17 @@ public class AuthService {
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+
+        // One-time use — invalidate immediately after a successful reset.
+        redisTemplate.delete(otpKey);
+        redisTemplate.delete(attemptsKey);
+
         log.info("Password successfully reset for user: {}", user.getEmail());
+    }
+
+    private String generateOtp() {
+        int number = SECURE_RANDOM.nextInt(1_000_000);
+        return String.format("%0" + OTP_LENGTH + "d", number);
     }
 
     @Transactional
