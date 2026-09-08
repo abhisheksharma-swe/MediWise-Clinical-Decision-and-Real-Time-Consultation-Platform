@@ -40,8 +40,14 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val activity = LocalContext.current as? android.app.Activity
+    val canUseBiometricLogin by viewModel.canUseBiometricLogin.collectAsStateWithLifecycle()
     val launchGoogleSignIn = rememberGoogleSignInLauncher(
-        onToken = viewModel::login,
+        onToken = viewModel::loginWithGoogleToken,
+        onError = { message -> viewModel.showError(message) }
+    )
+    val launchBiometricLogin = rememberBiometricLoginLauncher(
+        canUseBiometricLogin = canUseBiometricLogin,
+        onSuccess = viewModel::completeBiometricLogin,
         onError = { message -> viewModel.showError(message) }
     )
 
@@ -187,11 +193,10 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Social Buttons (Google, Facebook, Biometric)
+            // Social Buttons (Google, Biometric)
             MediWiseSocialRow(
                 onGoogleClick = launchGoogleSignIn,
-                onFacebookClick = { viewModel.login("mock_facebook_token") },
-                onBiometricClick = { viewModel.login("mock_biometric_token") }
+                onBiometricClick = launchBiometricLogin
             )
 
             Spacer(modifier = Modifier.height(32.dp))

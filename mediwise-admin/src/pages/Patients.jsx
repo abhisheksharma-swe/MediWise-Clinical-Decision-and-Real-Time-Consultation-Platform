@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { getPatients, togglePatientStatus } from '../services/patientService'
+import { getPatients, togglePatientStatus, updateUserRole } from '../services/patientService'
+import { getPatientAiReports } from '../services/aiService'
 import DataTable from '../components/common/DataTable'
 import Badge from '../components/common/Badge'
 import Modal from '../components/common/Modal'
 import ToastContainer, { useToast } from '../components/common/Toast'
 import ErrorState from '../components/common/ErrorState'
-import { SearchIcon, CheckCircleIcon, XCircleIcon } from '../components/common/Icons'
+import { USER_ROLES } from '../utils/constants'
+import { SearchIcon, CheckCircleIcon, XCircleIcon, ShieldCheckIcon, ZapIcon } from '../components/common/Icons'
+
+const ROLE_OPTIONS = Object.values(USER_ROLES)
 
 export default function Patients() {
   const [patients, setPatients] = useState([])
@@ -15,6 +19,18 @@ export default function Patients() {
   const [selected, setSelected] = useState(null)
   const [actionType, setActionType] = useState('suspend') // 'suspend' | 'activate'
   const [statusLoading, setStatusLoading] = useState(false)
+
+  // Role change
+  const [roleTarget, setRoleTarget] = useState(null)
+  const [newRole, setNewRole]       = useState(USER_ROLES.PATIENT)
+  const [roleLoading, setRoleLoading] = useState(false)
+
+  // AI clinical reports (read-only)
+  const [aiTarget, setAiTarget]       = useState(null)
+  const [aiReports, setAiReports]     = useState([])
+  const [aiLoading, setAiLoading]     = useState(false)
+  const [aiError, setAiError]         = useState('')
+
   const { toasts, show: showToast, dismiss } = useToast()
 
   async function fetchPatients() {
@@ -50,6 +66,41 @@ export default function Patients() {
       showToast(err?.response?.data?.message || 'Status update failed.', 'error')
     } finally {
       setStatusLoading(false)
+    }
+  }
+
+  function openRoleModal(patient) {
+    setRoleTarget(patient)
+    setNewRole(patient.role || USER_ROLES.PATIENT)
+  }
+
+  async function handleRoleChange() {
+    if (!roleTarget) return
+    setRoleLoading(true)
+    try {
+      await updateUserRole(roleTarget.id, newRole)
+      showToast(`Role for ${roleTarget.fullName || roleTarget.email} updated to ${newRole}.`, 'success')
+      setRoleTarget(null)
+      fetchPatients()
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Role update failed.', 'error')
+    } finally {
+      setRoleLoading(false)
+    }
+  }
+
+  async function openAiReports(patient) {
+    setAiTarget(patient)
+    setAiLoading(true)
+    setAiError('')
+    setAiReports([])
+    try {
+      const res = await getPatientAiReports(patient.id)
+      setAiReports(res?.data || [])
+    } catch (err) {
+      setAiError(err?.response?.data?.message || 'Failed to load AI clinical reports for this patient.')
+    } finally {
+      setAiLoading(false)
     }
   }
 
@@ -92,6 +143,22 @@ export default function Patients() {
               <span>Reactivate</span>
             </button>
           )}
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => openRoleModal(r)}
+            id={`change-role-${r.id}`}
+          >
+            <ShieldCheckIcon size={14} />
+            <span>Role</span>
+          </button>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => openAiReports(r)}
+            id={`ai-reports-${r.id}`}
+          >
+            <ZapIcon size={14} />
+            <span>AI Reports</span>
+          </button>
         </div>
       ),
     },
@@ -154,6 +221,75 @@ export default function Patients() {
             ? 'The patient will be prevented from booking appointments and logging into the platform until restored.'
             : 'The patient will immediately be restored full consultation and platform booking privileges.'}
         </p>
+      </Modal>
+
+      <Modal
+        isOpen={!!roleTarget}
+        title="Change User Role"
+        onClose={() => setRoleTarget(null)}
+        onConfirm={handleRoleChange}
+        confirmText="Update Role"
+        confirmVariant="primary"
+        loading={roleLoading}
+      >
+        <p>
+          Update platform role for <strong>{roleTarget?.fullName || roleTarget?.email}</strong>.
+        </p>
+        <div className="form-group" style={{ marginTop: '0.75rem' }}>
+          <label className="form-label">New Role</label>
+          <select
+            id="role-select"
+            className="form-input"
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value)}
+          >
+            {ROLE_OPTIONS.map((role) => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
+        </div>
+        <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
+          Changing a user's role immediately changes what parts of the platform they can access.
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={!!aiTarget}
+        title={`AI Clinical Reports — ${aiTarget?.fullName || aiTarget?.email || ''}`}
+        onClose={() => setAiTarget(null)}
+      >
+        {aiLoading ? (
+          <div className="loading-inline"><div className="spinner" /></div>
+        ) : aiError ? (
+          <p className="text-muted">{aiError}</p>
+        ) : aiReports.length === 0 ? (
+          <p className="text-muted">No AI symptom-triage reports have been generated for this patient yet.</p>
+        ) : (
+          <div className="ai-report-list">
+            {aiReports.map((report) => (
+              <div key={report.id} className="ai-report-item">
+                <div className="ai-report-item-header">
+                  <span className={`badge ${report.urgencyScore >= 70 ? 'badge--danger' : report.urgencyScore >= 40 ? 'badge--warning' : 'badge--success'}`}>
+                    Urgency {report.urgencyScore}
+                  </span>
+                  <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                    {report.createdAt ? new Date(report.createdAt).toLocaleString() : '—'}
+                  </span>
+                </div>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <strong>Suggested Specialty:</strong> {report.suggestedSpecialty || '—'}
+                </div>
+                <div><strong>Confidence:</strong> {report.confidence != null ? `${Math.round(report.confidence * 100)}%` : '—'}</div>
+                <div style={{ marginTop: '0.35rem' }}><strong>Recommendation:</strong> {report.recommendation || '—'}</div>
+                {report.riskFactors?.length > 0 && (
+                  <div style={{ marginTop: '0.35rem' }}>
+                    <strong>Risk Factors:</strong> {report.riskFactors.join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   )

@@ -15,6 +15,12 @@ public class AppointmentResponse {
     private UUID id;
     private UUID patientId;
     private UUID doctorId;
+    /** The User ids behind patientId/doctorId (which are profile ids, not user ids) — needed
+     * client-side to address WebRTC call signaling, which routes by user id (see
+     * CallSignalingController / convertAndSendToUser). */
+    private UUID patientUserId;
+    private UUID doctorUserId;
+    private String patientName;
     private String doctorName;
     private String doctorSpecialty;
     private String doctorProfileImage;
@@ -33,14 +39,19 @@ public class AppointmentResponse {
     private Instant updatedAt;
 
     public static AppointmentResponse from(Appointment a, TimeSlot slot) {
-        return from(a, slot, null, null, null);
+        return from(a, slot, null, null, null, null, null, null);
     }
 
-    public static AppointmentResponse from(Appointment a, TimeSlot slot, String doctorName, String doctorSpecialty, String doctorProfileImage) {
+    public static AppointmentResponse from(
+            Appointment a, TimeSlot slot, String doctorName, String doctorSpecialty, String doctorProfileImage,
+            UUID doctorUserId, UUID patientUserId, String patientName) {
         return AppointmentResponse.builder()
                 .id(a.getId())
                 .patientId(a.getPatientId())
                 .doctorId(a.getDoctorId())
+                .patientUserId(patientUserId)
+                .doctorUserId(doctorUserId)
+                .patientName(patientName)
                 .doctorName(doctorName)
                 .doctorSpecialty(doctorSpecialty)
                 .doctorProfileImage(doctorProfileImage)

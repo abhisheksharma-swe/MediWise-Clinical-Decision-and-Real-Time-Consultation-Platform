@@ -1,14 +1,17 @@
 package com.mediwise.doctor.dto;
 
 import com.mediwise.doctor.model.Doctor;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@Data @Builder
+@Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class DoctorResponse {
     private UUID id;
     private UUID userId;
@@ -31,7 +34,10 @@ public class DoctorResponse {
                 .fullName(d.getFullName())
                 .bio(d.getBio())
                 .specialty(d.getSpecialty())
-                .specialties(d.getSpecialties())
+                // Copy into a plain HashSet — d.getSpecialties() is Hibernate's own
+                // PersistentSet wrapper, which can't be serialized/deserialized safely
+                // once detached from its (already-closed) Session.
+                .specialties(d.getSpecialties() == null ? null : new HashSet<>(d.getSpecialties()))
                 .experienceYears(d.getExperienceYears())
                 .consultationFee(d.getConsultationFee())
                 .profileImage(d.getProfileImage())

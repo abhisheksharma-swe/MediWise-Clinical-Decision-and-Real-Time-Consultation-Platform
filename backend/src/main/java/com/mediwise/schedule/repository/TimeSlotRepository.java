@@ -33,4 +33,16 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, UUID> {
     int tryLockSlot(@Param("slotId") UUID slotId,
                     @Param("userId") UUID userId,
                     @Param("expiresAt") Instant expiresAt);
+
+    /**
+     * Atomically consumes a slot this user holds the lock on, turning it into
+     * a permanent booking. Conditioned on the current LOCKED/lockedBy state so
+     * two near-simultaneous booking attempts for the same slot can't both
+     * succeed — the loser gets 0 rows updated instead of silently overwriting
+     * the winner's row (a plain read-modify-save here would race).
+     */
+    @Modifying
+    @Query("UPDATE TimeSlot s SET s.status = 'BOOKED', s.lockedBy = null, " +
+            "s.lockedUntil = null WHERE s.id = :slotId AND s.status = 'LOCKED' AND s.lockedBy = :userId")
+    int tryConsumeLockedSlot(@Param("slotId") UUID slotId, @Param("userId") UUID userId);
 }

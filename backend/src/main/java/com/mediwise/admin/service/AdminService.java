@@ -13,6 +13,7 @@ import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.payment.model.Payment;
 import com.mediwise.payment.repository.PaymentRepository;
+import com.mediwise.profile.repository.PatientProfileRepository;
 import com.mediwise.schedule.model.TimeSlot;
 import com.mediwise.schedule.repository.TimeSlotRepository;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class AdminService {
     private final AppointmentRepository appointmentRepository;
     private final PaymentRepository paymentRepository;
     private final TimeSlotRepository slotRepository;
+    private final PatientProfileRepository patientProfileRepository;
 
     public Page<UserSummaryResponse> getUsers(User.Role role, String search, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -235,6 +237,11 @@ public class AdminService {
         String docName = doctor != null ? doctor.getFullName() : null;
         String docSpecialty = doctor != null ? doctor.getSpecialty() : null;
         String docImage = doctor != null ? doctor.getProfileImage() : null;
-        return AppointmentResponse.from(appointment, slot, docName, docSpecialty, docImage);
+        UUID doctorUserId = doctor != null ? doctor.getUserId() : null;
+        UUID patientUserId = patientProfileRepository.findById(appointment.getPatientId())
+                .map(p -> p.getUserId()).orElse(null);
+        String patientName = patientProfileRepository.findById(appointment.getPatientId())
+            .map(com.mediwise.profile.model.PatientProfile::getFullName).orElse(null);
+        return AppointmentResponse.from(appointment, slot, docName, docSpecialty, docImage, doctorUserId, patientUserId, patientName);
     }
 }

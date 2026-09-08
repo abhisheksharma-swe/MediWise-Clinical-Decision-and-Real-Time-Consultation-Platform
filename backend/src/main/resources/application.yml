@@ -36,8 +36,8 @@ spring:
 
     redis:
       enabled: true
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
       lettuce:
@@ -63,7 +63,8 @@ spring:
 # JWT Configuration
 application:
   jwt:
-    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    secret: ${JWT_SECRET:}
+    secret-name: ${JWT_SECRET_NAME:mediwise/prod/jwt}
     expiration: 900000          # 15 minutes
     refresh-expiration: 604800000  # 7 days
 
@@ -80,6 +81,9 @@ application:
     secret-key: ${AWS_SECRET_KEY:}
     region: ${AWS_REGION:ap-south-1}
     s3:
+      # Set only for a local/dev S3-compatible store (e.g. MinIO). Left blank, the client
+      # talks to real AWS S3 as normal - this never applies in production.
+      endpoint: ${S3_ENDPOINT:}
       bucket: ${S3_BUCKET:clinical-system-files}
       base-url: ${S3_BASE_URL:https://clinical-system-files.s3.ap-south-1.amazonaws.com}
 

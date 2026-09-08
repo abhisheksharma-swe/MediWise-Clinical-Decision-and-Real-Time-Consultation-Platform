@@ -2,8 +2,6 @@ package com.mediwise.profile.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -35,11 +33,17 @@ public class PatientProfile {
     @Column(name = "profile_image")
     private String profileImage;
 
-    @Column(columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "TEXT")
     private String address;
 
-    @Column(name = "emergency_contact", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "emergency_contact", columnDefinition = "TEXT")
     private String emergencyContact;
+
+    /**
+     * Not persisted on this table — copied over from {@code User.phone} by
+     * {@code ProfileService} so API consumers can read/display the phone
+     * number alongside the rest of the profile without a schema change.
+     */
+    @Transient
+    private String phone;
 }

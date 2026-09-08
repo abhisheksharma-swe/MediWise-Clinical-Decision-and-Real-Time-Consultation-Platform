@@ -24,6 +24,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SplashScreen(
     navController: NavController,
+    deepLinkRoute: String? = null,
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle(initialValue = null)
@@ -48,8 +49,15 @@ fun SplashScreen(
         if (isLoggedIn != null) {
             delay(1800)
             if (isLoggedIn == true) {
-                navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Splash.route) { inclusive = true }
+                if (!deepLinkRoute.isNullOrBlank()) {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                    navController.navigate(deepLinkRoute)
+                } else {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
                 }
             } else {
                 navController.navigate(Screen.Welcome.route) {

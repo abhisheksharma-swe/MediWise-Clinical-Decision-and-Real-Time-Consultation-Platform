@@ -1,32 +1,33 @@
 package com.mediwise.notification.service;
 
 import com.google.firebase.messaging.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class FirebasePushService {
 
-    @Autowired(required = false)
-    private RedisTemplate<String, Object> redisTemplate;
+    private final DeviceTokenService deviceTokenService;
 
-    public void sendToUser(java.util.UUID userId, String title, String body) {
-        if (redisTemplate == null) {
-            log.debug("Redis unavailable — skipping FCM push to user {}", userId);
+    /** Pushes to every active device registered for this user. */
+    public void sendToUser(UUID userId, String title, String body) {
+        sendToUser(userId, title, body, Map.of());
+    }
+
+    public void sendToUser(UUID userId, String title, String body, Map<String, String> data) {
+        List<String> tokens = deviceTokenService.getActiveTokensForUser(userId);
+        if (tokens.isEmpty()) {
+            log.debug("No active device tokens for user {} — skipping push", userId);
             return;
         }
-        String fcmToken = (String) redisTemplate.opsForValue().get("fcm_token:" + userId);
-        if (fcmToken == null || fcmToken.isBlank()) {
-            log.debug("No FCM token registered for user {} — skipping push", userId);
-            return;
-        }
-        sendToToken(fcmToken, title, body, Map.of());
+        sendToMultiple(tokens, title, body, data);
     }
 
     public void sendToToken(String fcmToken, String title, String body, Map<String, String> data) {
@@ -46,12 +47,15 @@ public class FirebasePushService {
             String response = FirebaseMessaging.getInstance().send(message);
             log.debug("FCM sent: {}", response);
         } catch (FirebaseMessagingException e) {
-            log.error("FCM send failed for token {}: {} ({})",
-                    fcmToken, e.getMessage(), e.getMessagingErrorCode());
+            handleSendFailure(fcmToken, e);
         }
     }
 
     public void sendToMultiple(List<String> tokens, String title, String body) {
+        sendToMultiple(tokens, title, body, Map.of());
+    }
+
+    public void sendToMultiple(List<String> tokens, String title, String body, Map<String, String> data) {
         if (tokens.isEmpty()) return;
         try {
             MulticastMessage message = MulticastMessage.builder()
@@ -60,12 +64,38 @@ public class FirebasePushService {
                             .setTitle(title)
                             .setBody(body)
                             .build())
+                    .putAllData(data != null ? data : Map.of())
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .build())
                     .build();
             BatchResponse response = FirebaseMessaging.getInstance().sendEachForMulticast(message);
             log.info("FCM multicast: {} success / {} failure",
                     response.getSuccessCount(), response.getFailureCount());
+
+            if (response.getFailureCount() > 0) {
+                List<SendResponse> responses = response.getResponses();
+                for (int i = 0; i < responses.size(); i++) {
+                    SendResponse r = responses.get(i);
+                    if (!r.isSuccessful() && r.getException() != null) {
+                        handleSendFailure(tokens.get(i), r.getException());
+                    }
+                }
+            }
         } catch (FirebaseMessagingException e) {
             log.error("FCM multicast failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Disables a token that Firebase reports as permanently invalid, so it
+     * stops being retried on every future push to this user's other devices.
+     */
+    private void handleSendFailure(String token, FirebaseMessagingException e) {
+        MessagingErrorCode code = e.getMessagingErrorCode();
+        log.warn("FCM send failed ({}): {}", code, e.getMessage());
+        if (code == MessagingErrorCode.UNREGISTERED || code == MessagingErrorCode.INVALID_ARGUMENT) {
+            deviceTokenService.disableToken(token);
         }
     }
 }

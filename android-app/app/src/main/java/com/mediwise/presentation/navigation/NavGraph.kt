@@ -4,11 +4,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -24,10 +27,18 @@ import com.mediwise.presentation.screens.home.HomeScreen
 import com.mediwise.presentation.screens.doctors.*
 import com.mediwise.presentation.screens.schedule.ScheduleScreen
 import com.mediwise.presentation.screens.appointment.*
+import com.mediwise.presentation.screens.doctor.DoctorScheduleScreen
 import com.mediwise.presentation.screens.profile.*
 import com.mediwise.presentation.screens.notification.NotificationScreen
 import com.mediwise.presentation.screens.chat.ChatScreen
+import com.mediwise.presentation.screens.chat.ConversationListScreen
+import com.mediwise.presentation.screens.call.CallScreen
+import com.mediwise.domain.model.CallDirection
+import com.mediwise.domain.model.CallMediaType
+import com.mediwise.presentation.screens.payment.PaymentScreen
+import com.mediwise.presentation.screens.payment.PaymentSuccessScreen
 import com.mediwise.presentation.screens.welcome.WelcomeScreen
+import com.mediwise.presentation.screens.ai.AiTriageScreen
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
@@ -51,20 +62,49 @@ sealed class Screen(val route: String) {
     object AppointmentDetail : Screen("appointments/{appointmentId}") {
         fun createRoute(id: String) = "appointments/$id"
     }
+    object Payment : Screen("payment/{appointmentId}") {
+        fun createRoute(appointmentId: String) = "payment/$appointmentId"
+    }
+    object PaymentSuccess : Screen("payment_success/{paymentId}") {
+        fun createRoute(paymentId: String) = "payment_success/$paymentId"
+    }
     object Chat : Screen("chat/{roomId}") {
         fun createRoute(roomId: String) = "chat/$roomId"
     }
+    object Conversations : Screen("conversations")
+    object Call : Screen("call/{roomId}/{otherPartyId}/{otherPartyName}/{mediaType}/{direction}") {
+        fun createRoute(roomId: String, otherPartyId: String, otherPartyName: String, mediaType: String, direction: String): String {
+            val encodedRoom = java.net.URLEncoder.encode(roomId, "UTF-8")
+            val encodedName = java.net.URLEncoder.encode(otherPartyName, "UTF-8")
+            return "call/$encodedRoom/$otherPartyId/$encodedName/$mediaType/$direction"
+        }
+    }
     object Notifications : Screen("notifications")
+    object AiTriage : Screen("ai_triage")
+    object AiPatientReport : Screen("ai_triage/{patientId}") {
+        fun createRoute(patientId: String) = "ai_triage/$patientId"
+    }
+    object ConsultationHistory : Screen("consultation_history")
+    object PatientConsultationHistory : Screen("consultation_history/{patientId}") {
+        fun createRoute(patientId: String) = "consultation_history/$patientId"
+    }
     object Profile : Screen("profile")
     object EditProfile : Screen("edit_profile")
     object Settings : Screen("settings")
+    object DoctorSchedule : Screen("doctor_schedule")
 }
 
-/** The four persistent, YouTube-style bottom-navigation tabs. */
+/**
+ * The persistent, YouTube-style bottom-navigation tab routes. Patients see Home/Doctors/
+ * Appointments/Profile; doctors see Home/Schedule/Profile instead (ClinicalBottomBar
+ * branches on role) — both DoctorList and DoctorSchedule are included here so the bottom
+ * bar stays visible on whichever of the two is this user's actual tab.
+ */
 private val mainTabRoutes = setOf(
     Screen.Home.route,
     Screen.DoctorList.route,
     Screen.Appointments.route,
+    Screen.DoctorSchedule.route,
     Screen.Profile.route
 )
 
@@ -83,16 +123,43 @@ fun NavController.navigateToMainTab(route: String) {
 @Composable
 fun NavGraph(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Splash.route
+    startDestination: String = Screen.Splash.route,
+    deepLinkRoute: String? = null
 ) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val role by hiltViewModel<RoleViewModel>().role.collectAsStateWithLifecycle()
+
+    // App-wide incoming-call listener - a call can arrive on any screen, not just a
+    // dedicated call screen (see IncomingCallViewModel). Navigation stays here in the
+    // composable rather than in the ViewModel, matching how `role`-driven behavior above
+    // is handled.
+    val incomingCallViewModel = hiltViewModel<IncomingCallViewModel>()
+    val incomingCall by incomingCallViewModel.incomingCall.collectAsStateWithLifecycle()
+    LaunchedEffect(incomingCall) {
+        incomingCall?.let { call ->
+            // "Incoming call" is a generic label here - the app doesn't have the caller's
+            // display name available from a bare user id (only chat/appointment screens do,
+            // via the appointment's denormalized doctor name); CallScreen shows this as-is.
+            navController.navigate(
+                Screen.Call.createRoute(
+                    roomId = call.roomId,
+                    otherPartyId = call.callerId,
+                    otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                    mediaType = call.mediaType.name,
+                    direction = CallDirection.INCOMING.name
+                )
+            )
+            incomingCallViewModel.clearIncomingCall()
+        }
+    }
 
     // Reselect ticks: incremented when the user taps the already-active tab so that
     // screen refreshes without navigating and without duplicating the back stack.
     var homeRefreshTick by remember { mutableIntStateOf(0) }
     var doctorsRefreshTick by remember { mutableIntStateOf(0) }
     var appointmentsRefreshTick by remember { mutableIntStateOf(0) }
+    var doctorScheduleRefreshTick by remember { mutableIntStateOf(0) }
     var profileRefreshTick by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -101,11 +168,13 @@ fun NavGraph(
                 ClinicalBottomBar(
                     navController = navController,
                     currentRoute = currentRoute ?: Screen.Home.route,
+                    role = role,
                     onTabReselected = { route ->
                         when (route) {
                             Screen.Home.route -> homeRefreshTick++
                             Screen.DoctorList.route -> doctorsRefreshTick++
                             Screen.Appointments.route -> appointmentsRefreshTick++
+                            Screen.DoctorSchedule.route -> doctorScheduleRefreshTick++
                             Screen.Profile.route -> profileRefreshTick++
                         }
                     }
@@ -120,7 +189,7 @@ fun NavGraph(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Splash.route) {
-                SplashScreen(navController)
+                SplashScreen(navController, deepLinkRoute = deepLinkRoute)
             }
 
             composable(Screen.Welcome.route) {
@@ -170,9 +239,36 @@ fun NavGraph(
                 HomeScreen(navController, refreshTick = homeRefreshTick)
             }
 
+            composable(Screen.AiTriage.route) {
+                AiTriageScreen(
+                    onBackClick = { navController.navigateUp() },
+                    onDoctorClick = { id -> navController.navigate(Screen.DoctorDetail.createRoute(id)) }
+                )
+            }
+
+            composable(Screen.AiPatientReport.route, arguments = listOf(navArgument("patientId") { type = NavType.StringType })) { backStackEntry ->
+                AiTriageScreen(
+                    patientId = backStackEntry.arguments?.getString("patientId"),
+                    onBackClick = { navController.navigateUp() },
+                    onDoctorClick = { id -> navController.navigate(Screen.DoctorDetail.createRoute(id)) }
+                )
+            }
+
+            composable(Screen.ConsultationHistory.route) {
+                ConsultationHistoryScreen(onBackClick = { navController.navigateUp() })
+            }
+
+            composable(Screen.PatientConsultationHistory.route, arguments = listOf(navArgument("patientId") { type = NavType.StringType })) { backStackEntry ->
+                ConsultationHistoryScreen(
+                    patientId = backStackEntry.arguments?.getString("patientId"),
+                    onBackClick = { navController.navigateUp() }
+                )
+            }
+
             composable(Screen.DoctorList.route) {
                 DoctorListScreen(
                     onDoctorClick = { id -> navController.navigate(Screen.DoctorDetail.createRoute(id)) },
+                    onFavoritesClick = { navController.navigate(Screen.Favorites.route) },
                     refreshTick = doctorsRefreshTick
                 )
             }
@@ -198,7 +294,24 @@ fun NavGraph(
                 ScheduleScreen(
                     doctorId = doctorId,
                     onBackClick = { navController.navigateUp() },
-                    onSlotSelected = { date, time ->
+                    onAppointmentBooked = { appointmentId ->
+                        navController.navigate(Screen.Payment.createRoute(appointmentId)) {
+                            popUpTo(Screen.Schedule.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.Payment.route, arguments = listOf(navArgument("appointmentId") { type = NavType.StringType })) { backStackEntry ->
+                val appointmentId = backStackEntry.arguments?.getString("appointmentId") ?: ""
+                PaymentScreen(
+                    appointmentId = appointmentId,
+                    onPaymentSuccess = { paymentId ->
+                        navController.navigate(Screen.PaymentSuccess.createRoute(paymentId)) {
+                            popUpTo(Screen.Home.route)
+                        }
+                    },
+                    onBackClick = {
                         navController.navigate(Screen.Appointments.route) {
                             popUpTo(Screen.Home.route)
                         }
@@ -206,9 +319,15 @@ fun NavGraph(
                 )
             }
 
+            composable(Screen.PaymentSuccess.route, arguments = listOf(navArgument("paymentId") { type = NavType.StringType })) { backStackEntry ->
+                val paymentId = backStackEntry.arguments?.getString("paymentId") ?: ""
+                PaymentSuccessScreen(navController = navController, paymentId = paymentId)
+            }
+
             composable(Screen.Appointments.route) {
                 AppointmentListScreen(
                     onAppointmentClick = { id -> navController.navigate(Screen.AppointmentDetail.createRoute(id)) },
+                    onJoinClick = { id -> navController.navigate(Screen.Chat.createRoute("appointment_$id")) },
                     refreshTick = appointmentsRefreshTick
                 )
             }
@@ -218,8 +337,59 @@ fun NavGraph(
                 AppointmentDetailScreen(
                     appointmentId = appointmentId,
                     onBackClick = { navController.navigateUp() },
-                    onJoinClick = { },
-                    onReviewClick = { id -> }
+                    onJoinClick = { navController.navigate(Screen.Chat.createRoute("appointment_$appointmentId")) },
+                    onAiReportClick = { patientId -> navController.navigate(Screen.AiPatientReport.createRoute(patientId)) },
+                    onPatientHistoryClick = { patientId -> navController.navigate(Screen.PatientConsultationHistory.createRoute(patientId)) },
+                    onReviewClick = { id -> },
+                    onAudioCallClick = { otherPartyId ->
+                        navController.navigate(
+                            Screen.Call.createRoute(
+                                roomId = "appointment_$appointmentId",
+                                otherPartyId = otherPartyId,
+                                otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                                mediaType = CallMediaType.AUDIO.name,
+                                direction = CallDirection.OUTGOING.name
+                            )
+                        )
+                    },
+                    onVideoCallClick = { otherPartyId ->
+                        navController.navigate(
+                            Screen.Call.createRoute(
+                                roomId = "appointment_$appointmentId",
+                                otherPartyId = otherPartyId,
+                                otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                                mediaType = CallMediaType.VIDEO.name,
+                                direction = CallDirection.OUTGOING.name
+                            )
+                        )
+                    }
+                )
+            }
+
+            composable(
+                Screen.Call.route,
+                arguments = listOf(
+                    navArgument("roomId") { type = NavType.StringType },
+                    navArgument("otherPartyId") { type = NavType.StringType },
+                    navArgument("otherPartyName") { type = NavType.StringType },
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("direction") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val args = backStackEntry.arguments
+                val roomId = java.net.URLDecoder.decode(args?.getString("roomId") ?: "", "UTF-8")
+                val otherPartyId = args?.getString("otherPartyId") ?: ""
+                val otherPartyName = java.net.URLDecoder.decode(args?.getString("otherPartyName") ?: "", "UTF-8")
+                val mediaType = CallMediaType.entries.firstOrNull { it.name == args?.getString("mediaType") } ?: CallMediaType.AUDIO
+                val direction = CallDirection.entries.firstOrNull { it.name == args?.getString("direction") } ?: CallDirection.OUTGOING
+
+                CallScreen(
+                    roomId = roomId,
+                    otherPartyId = otherPartyId,
+                    otherPartyName = otherPartyName,
+                    mediaType = mediaType,
+                    direction = direction,
+                    onCallEnded = { navController.popBackStack() }
                 )
             }
 
@@ -227,7 +397,38 @@ fun NavGraph(
                 val roomId = backStackEntry.arguments?.getString("roomId") ?: ""
                 ChatScreen(
                     navController = navController,
-                    roomId = roomId
+                    roomId = roomId,
+                    onAudioCallClick = { otherPartyId, otherPartyName ->
+                        navController.navigate(
+                            Screen.Call.createRoute(
+                                roomId = roomId,
+                                otherPartyId = otherPartyId,
+                                otherPartyName = otherPartyName,
+                                mediaType = CallMediaType.AUDIO.name,
+                                direction = CallDirection.OUTGOING.name
+                            )
+                        )
+                    },
+                    onVideoCallClick = { otherPartyId, otherPartyName ->
+                        navController.navigate(
+                            Screen.Call.createRoute(
+                                roomId = roomId,
+                                otherPartyId = otherPartyId,
+                                otherPartyName = otherPartyName,
+                                mediaType = CallMediaType.VIDEO.name,
+                                direction = CallDirection.OUTGOING.name
+                            )
+                        )
+                    }
+                )
+            }
+
+            composable(Screen.Conversations.route) {
+                ConversationListScreen(
+                    onConversationClick = { appointmentId ->
+                        navController.navigate(Screen.Chat.createRoute("appointment_$appointmentId"))
+                    },
+                    onBackClick = { navController.navigateUp() }
                 )
             }
 
@@ -236,6 +437,7 @@ fun NavGraph(
                     onEditClick = { navController.navigate(Screen.EditProfile.route) },
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
                     onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
+                    onConsultationHistoryClick = { navController.navigate(Screen.ConsultationHistory.route) },
                     onLogoutClick = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }
@@ -245,10 +447,31 @@ fun NavGraph(
                 )
             }
 
+            composable(Screen.DoctorSchedule.route) {
+                // Reached only via the doctor's bottom-nav "Schedule" tab — there is no
+                // other entry point, so there's nothing to navigate back to.
+                DoctorScheduleScreen(
+                    onBackClick = { navController.navigateUp() },
+                    showBackButton = false,
+                    refreshTick = doctorScheduleRefreshTick
+                )
+            }
+
             composable(Screen.EditProfile.route) {
                 EditProfileScreen(
-                    onBackClick = { navController.navigateUp() },
-                    onSaveClick = { navController.navigateUp() }
+                    // ProfileScreen and EditProfileScreen are separate nav destinations, so Hilt
+                    // gives each its own ProfileViewModel instance — neither a save nor an avatar
+                    // upload here touches ProfileScreen's already-loaded state. Bumping the tick
+                    // on the way out (back OR save — an avatar upload persists immediately, before
+                    // Save is ever pressed) forces ProfileScreen's LaunchedEffect to reload.
+                    onBackClick = {
+                        profileRefreshTick++
+                        navController.navigateUp()
+                    },
+                    onSaveClick = {
+                        profileRefreshTick++
+                        navController.navigateUp()
+                    }
                 )
             }
 

@@ -36,6 +36,19 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     boolean existsByDoctorIdAndPatientId(UUID doctorId, UUID patientId);
 
+    /**
+     * A slot can be booked, cancelled, and rebooked by someone else over its
+     * lifetime, so several rows may share the same slot_id historically — this
+     * only ever returns the current non-cancelled owner (at most one can exist
+     * at a time), used to make appointment creation idempotent on retry.
+     */
+    java.util.Optional<Appointment> findFirstBySlotIdAndStatusNot(
+            UUID slotId, Appointment.AppointmentStatus excludedStatus);
+
+    /** PENDING appointments whose payment window has elapsed without confirmation. */
+    java.util.List<Appointment> findByStatusAndCreatedAtBefore(
+            Appointment.AppointmentStatus status, Instant cutoff);
+
     @Query("SELECT COUNT(a) FROM Appointment a WHERE (:doctorId IS NULL OR a.doctorId = :doctorId) " +
             "AND a.createdAt BETWEEN :start AND :end")
     long countByDoctorIdAndCreatedAtBetween(

@@ -1,21 +1,33 @@
 package com.mediwise.presentation.screens.profile
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import com.mediwise.core.datastore.SessionDataStore
+import com.mediwise.core.fcm.FcmTokenRegistrationWorker
+import com.mediwise.core.network.AppNotificationSocket
 import com.mediwise.core.result.Result
 import com.mediwise.core.result.onSuccess
+import com.mediwise.domain.model.Doctor
 import com.mediwise.domain.model.PatientProfile
+import com.mediwise.domain.model.Role
+import com.mediwise.domain.repository.AppointmentRepository
 import com.mediwise.domain.repository.AuthRepository
 import com.mediwise.domain.repository.DoctorRepository
+import com.mediwise.domain.repository.NotificationRepository
 import com.mediwise.domain.usecase.appointment.GetMyAppointmentsUseCase
+import com.mediwise.domain.usecase.doctor.GetMyDoctorProfileUseCase
+import com.mediwise.domain.usecase.doctor.UpdateMyDoctorProfileUseCase
 import com.mediwise.domain.usecase.profile.GetProfileUseCase
 import com.mediwise.domain.usecase.profile.UpdateProfileUseCase
 import com.mediwise.domain.usecase.profile.UploadProfileImageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -28,22 +40,32 @@ data class ProfileUiState(
     val isSaving: Boolean = false,
     val isUploadingImage: Boolean = false,
     val profile: PatientProfile? = null,
+    val doctorProfile: Doctor? = null,
     val totalAppointments: Int = 0,
     val totalDoctors: Int = 0,
     val calculatedAge: String = "--",
     val updateSuccess: Boolean = false,
-    val error: String? = null
-)
+    val error: String? = null,
+    val role: Role? = null
+) {
+    val isDoctor: Boolean get() = role == Role.DOCTOR
+}
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val getProfileUseCase: GetProfileUseCase,
     private val updateProfileUseCase: UpdateProfileUseCase,
+    private val getMyDoctorProfileUseCase: GetMyDoctorProfileUseCase,
+    private val updateMyDoctorProfileUseCase: UpdateMyDoctorProfileUseCase,
     private val uploadProfileImageUseCase: UploadProfileImageUseCase,
     private val doctorRepository: DoctorRepository,
+    private val appointmentRepository: AppointmentRepository,
     private val getMyAppointmentsUseCase: GetMyAppointmentsUseCase,
-    private val sessionDataStore: SessionDataStore
+    private val notificationRepository: NotificationRepository,
+    private val sessionDataStore: SessionDataStore,
+    private val appNotificationSocket: AppNotificationSocket,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -57,42 +79,75 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, updateSuccess = false) }
 
-            // 1. Fetch Profile Data via GetProfileUseCase
-            when (val result = getProfileUseCase()) {
-                is Result.Success -> {
-                    val profile = result.data
-                    val age = calculateAge(profile.dateOfBirth)
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            profile = profile,
-                            calculatedAge = age
-                        )
-                    }
-                }
-                is Result.Error -> {
-                    _uiState.update { it.copy(isLoading = false, error = result.exception.message) }
-                }
-                is Result.Loading -> {}
-            }
+            val role = sessionDataStore.userRoleEnum.first()
+            _uiState.update { it.copy(role = role) }
 
-            // 2. Fetch Total Appointments & Consulted Doctors Count
-            getMyAppointmentsUseCase(page = 0, size = 50).onSuccess { appts ->
-                val distinctDocIds = appts.map { it.doctorId }.filter { it.isNotBlank() }.toSet()
+            // Patient- and doctor-facing profile data live on entirely separate backend
+            // resources (/api/v1/profile vs /api/v1/doctors/me) with no fields in common
+            // beyond a name — calling the patient endpoint for a doctor account (or vice
+            // versa) would silently create a stray, unused PatientProfile row for that
+            // doctor. Route strictly by role instead.
+            if (role == Role.DOCTOR) {
+                loadDoctorProfile()
+            } else {
+                loadPatientProfile()
+            }
+        }
+    }
+
+    private suspend fun loadPatientProfile() {
+        // 1. Fetch Profile Data via GetProfileUseCase
+        when (val result = getProfileUseCase()) {
+            is Result.Success -> {
+                val profile = result.data
+                val age = calculateAge(profile.dateOfBirth)
                 _uiState.update {
                     it.copy(
-                        totalAppointments = appts.size,
-                        totalDoctors = maxOf(distinctDocIds.size, it.totalDoctors)
+                        isLoading = false,
+                        profile = profile,
+                        calculatedAge = age
                     )
                 }
             }
-
-            // 3. Fetch Favorites Count
-            doctorRepository.getFavorites().onSuccess { favs ->
-                _uiState.update {
-                    it.copy(totalDoctors = maxOf(it.totalDoctors, favs.size))
-                }
+            is Result.Error -> {
+                _uiState.update { it.copy(isLoading = false, error = result.exception.message) }
             }
+            is Result.Loading -> {}
+        }
+
+        // 2. Fetch Total Appointments & Consulted Doctors Count
+        getMyAppointmentsUseCase(page = 0, size = 50).onSuccess { appts ->
+            val distinctDocIds = appts.map { it.doctorId }.filter { it.isNotBlank() }.toSet()
+            _uiState.update {
+                it.copy(
+                    totalAppointments = appts.size,
+                    totalDoctors = maxOf(distinctDocIds.size, it.totalDoctors)
+                )
+            }
+        }
+
+        // 3. Fetch Favorites Count
+        doctorRepository.getFavorites().onSuccess { favs ->
+            _uiState.update {
+                it.copy(totalDoctors = maxOf(it.totalDoctors, favs.size))
+            }
+        }
+    }
+
+    private suspend fun loadDoctorProfile() {
+        when (val result = getMyDoctorProfileUseCase()) {
+            is Result.Success -> {
+                _uiState.update { it.copy(isLoading = false, doctorProfile = result.data) }
+            }
+            is Result.Error -> {
+                _uiState.update { it.copy(isLoading = false, error = result.exception.message) }
+            }
+            is Result.Loading -> {}
+        }
+
+        // Appointments this doctor has conducted (their own schedule, not a patient's bookings).
+        appointmentRepository.getDoctorAppointments(status = null, page = 0, size = 50).onSuccess { appts ->
+            _uiState.update { it.copy(totalAppointments = appts.size) }
         }
     }
 
@@ -130,7 +185,44 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateDoctorProfile(
+        fullName: String,
+        specialty: String,
+        bio: String,
+        experienceYears: String,
+        consultationFee: String,
+        available: Boolean,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, error = null) }
+            val result = updateMyDoctorProfileUseCase(
+                fullName = fullName,
+                specialty = specialty,
+                bio = bio,
+                experienceYears = experienceYears,
+                consultationFee = consultationFee,
+                available = available
+            )
+            when (result) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isSaving = false, updateSuccess = true, doctorProfile = result.data) }
+                    onComplete(true)
+                }
+                is Result.Error -> {
+                    _uiState.update { it.copy(isSaving = false, error = result.exception.message) }
+                    onComplete(false)
+                }
+                is Result.Loading -> {}
+            }
+        }
+    }
+
     fun uploadAvatar(imageBytes: ByteArray, mimeType: String = "image/jpeg") {
+        // The avatar-upload endpoint (/api/v1/profile/image) is a patient-profile resource;
+        // doctor photos are managed separately (e.g. via the admin panel) and have no
+        // equivalent self-service endpoint yet, so this is a no-op for doctor accounts.
+        if (_uiState.value.isDoctor) return
         viewModelScope.launch {
             _uiState.update { it.copy(isUploadingImage = true, error = null) }
             when (val res = uploadProfileImageUseCase(imageBytes, mimeType)) {
@@ -167,8 +259,18 @@ class ProfileViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
+            // Unregister this device's FCM token and stop any pending registration retry
+            // before the session (and the device id state it needs) is cleared.
+            val registeredToken = sessionDataStore.registeredFcmToken.first()
+                ?: sessionDataStore.pendingFcmToken.first()
+            if (!registeredToken.isNullOrBlank()) {
+                val deviceId = sessionDataStore.getOrCreateDeviceId()
+                notificationRepository.unregisterFcmToken(registeredToken, deviceId)
+            }
+            WorkManager.getInstance(appContext).cancelUniqueWork(FcmTokenRegistrationWorker.WORK_NAME)
+            appNotificationSocket.stop()
+
             authRepository.logout()
-            sessionDataStore.clearSession()
         }
     }
 }

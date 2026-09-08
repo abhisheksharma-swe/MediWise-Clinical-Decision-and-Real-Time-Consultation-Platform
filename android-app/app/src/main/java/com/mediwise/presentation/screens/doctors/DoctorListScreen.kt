@@ -30,6 +30,7 @@ import com.mediwise.presentation.theme.*
 @Composable
 fun DoctorListScreen(
     onDoctorClick: (String) -> Unit,
+    onFavoritesClick: () -> Unit = {},
     refreshTick: Int = 0,
     viewModel: DoctorViewModel = hiltViewModel()
 ) {
@@ -53,6 +54,9 @@ fun DoctorListScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onFavoritesClick) {
+                        Icon(Icons.Default.Favorite, contentDescription = "Favorites", tint = PrimaryBlue)
+                    }
                     IconButton(onClick = { /* open filter sheet */ }) {
                         Icon(Icons.Default.FilterList, contentDescription = "Filter", tint = PrimaryBlue)
                     }

@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +20,17 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
+/**
+ * Patient-only — mirrors DoctorController's /me endpoints being doctor-only. Without this,
+ * a doctor account calling this (e.g. from a role-unaware UI element) would silently get a
+ * stray PatientProfile row auto-created for their own user id (see
+ * ProfileService.getOrCreateProfile's find-or-create fallback), and any later attempt to use
+ * that id anywhere patient-only logic checks role (like AI symptom triage) would 401.
+ */
 @RestController
 @RequestMapping("/api/v1/profile")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('PATIENT')")
 @Tag(name = "Profile", description = "Patient profile management and image upload")
 public class ProfileController {
 

@@ -35,8 +35,8 @@ fun OtpScreen(
     val activity = LocalContext.current as? android.app.Activity
 
     LaunchedEffect(phone, mode) {
-        if (mode == "login" && activity != null) {
-            viewModel.startPhoneLogin(activity, phone)
+        if (activity != null) {
+            viewModel.startPhoneVerification(activity, phone, mode)
         }
     }
 
@@ -103,13 +103,7 @@ fun OtpScreen(
 
             MediWisePillButton(
                 text = "Verify Code",
-                onClick = {
-                    if (mode == "login") {
-                        viewModel.verifyPhoneCode(otp)
-                    } else {
-                        viewModel.register("mock_firebase_token_for_$phone", "$phone@email.com", phone)
-                    }
-                },
+                onClick = { viewModel.verifyPhoneCode(otp, mode, phone) },
                 isLoading = uiState.isLoading
             )
 

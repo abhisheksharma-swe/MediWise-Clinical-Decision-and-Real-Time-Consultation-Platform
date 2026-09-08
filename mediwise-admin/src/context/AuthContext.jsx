@@ -32,13 +32,16 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const response = await loginWithEmailPassword(email, password)
-    const { accessToken, user: userData } = response.data
+    const { accessToken, refreshToken, user: userData } = response.data
 
     if (userData.role !== 'ADMIN' && userData.role !== 'ROLE_ADMIN') {
       throw new Error('Access denied. Administrator privileges required.')
     }
 
     localStorage.setItem('mediwise_admin_token', accessToken)
+    if (refreshToken) {
+      localStorage.setItem('mediwise_admin_refresh_token', refreshToken)
+    }
     localStorage.setItem('mediwise_admin_user', JSON.stringify(userData))
     setToken(accessToken)
     setUser(userData)

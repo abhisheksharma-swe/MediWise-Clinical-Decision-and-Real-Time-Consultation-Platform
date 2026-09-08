@@ -133,6 +133,7 @@ public class AiService {
 
         Specification<Doctor> spec = Specification
                 .where(DoctorSpecification.isVerified())
+            .and(DoctorSpecification.isAvailable())
                 .and(DoctorSpecification.hasSpecialty(specialty));
 
         return doctorRepository.findAll(spec)
@@ -204,7 +205,7 @@ public class AiService {
     private AiReport analyzeWithGemini(SymptomLogRequest req) {
         if (geminiApiKey == null || geminiApiKey.isBlank()) {
             log.warn("Gemini API key not configured — returning safe fallback response");
-            return fallbackReport(req, "AI analysis is currently unavailable.");
+            return applyEmergencyOverride(fallbackReport(req, "AI analysis is currently unavailable."), req);
         }
 
         try {
@@ -214,7 +215,7 @@ public class AiService {
             return applyEmergencyOverride(report, req);
         } catch (Exception e) {
             log.error("Gemini symptom analysis failed: {}", e.getMessage(), e);
-            return fallbackReport(req, "AI analysis failed — please consult a doctor directly.");
+            return applyEmergencyOverride(fallbackReport(req, "AI analysis failed — please consult a doctor directly."), req);
         }
     }
 
@@ -341,7 +342,7 @@ public class AiService {
 
         boolean isEmergency = EMERGENCY_KEYWORDS.stream().anyMatch(combinedText::contains);
 
-        if (isEmergency && report.getUrgencyScore() < 90) {
+        if (isEmergency) {
             report.setUrgencyScore(100);
             report.setSuggestedSpecialty("Emergency Medicine");
             report.setRecommendation(

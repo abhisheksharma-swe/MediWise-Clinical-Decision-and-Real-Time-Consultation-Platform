@@ -6,9 +6,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.mediwise.domain.model.Role
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +33,9 @@ class SessionDataStore @Inject constructor(
         val MARKETING_EMAIL = androidx.datastore.preferences.core.booleanPreferencesKey("marketing_email")
         val BIOMETRIC = androidx.datastore.preferences.core.booleanPreferencesKey("biometric")
         val DARK_THEME = androidx.datastore.preferences.core.booleanPreferencesKey("dark_theme")
+        val DEVICE_ID = stringPreferencesKey("device_id")
+        val PENDING_FCM_TOKEN = stringPreferencesKey("pending_fcm_token")
+        val REGISTERED_FCM_TOKEN = stringPreferencesKey("registered_fcm_token")
     }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[Keys.ACCESS_TOKEN] }
@@ -37,6 +43,7 @@ class SessionDataStore @Inject constructor(
     val userId: Flow<String?> = context.dataStore.data.map { it[Keys.USER_ID] }
     val userEmail: Flow<String?> = context.dataStore.data.map { it[Keys.USER_EMAIL] }
     val userRole: Flow<String?> = context.dataStore.data.map { it[Keys.USER_ROLE] }
+    val userRoleEnum: Flow<Role?> = userRole.map { Role.fromRaw(it) }
     val isLoggedIn: Flow<Boolean> = context.dataStore.data.map { it[Keys.ACCESS_TOKEN] != null }
 
     val pushNotifications: Flow<Boolean> = context.dataStore.data.map { it[Keys.PUSH_NOTIF] ?: true }
@@ -45,6 +52,12 @@ class SessionDataStore @Inject constructor(
     val marketingEmails: Flow<Boolean> = context.dataStore.data.map { it[Keys.MARKETING_EMAIL] ?: false }
     val biometricLogin: Flow<Boolean> = context.dataStore.data.map { it[Keys.BIOMETRIC] ?: false }
     val darkMode: Flow<Boolean> = context.dataStore.data.map { it[Keys.DARK_THEME] ?: false }
+
+    /** Token saved by [com.mediwise.core.fcm.ClinicalFcmService] as soon as Firebase issues it, before it is confirmed registered with the backend. */
+    val pendingFcmToken: Flow<String?> = context.dataStore.data.map { it[Keys.PENDING_FCM_TOKEN] }
+
+    /** Token the backend last confirmed as registered for this device. */
+    val registeredFcmToken: Flow<String?> = context.dataStore.data.map { it[Keys.REGISTERED_FCM_TOKEN] }
 
     suspend fun saveSetting(key: String, value: Boolean) {
         context.dataStore.edit { prefs ->
@@ -70,6 +83,39 @@ class SessionDataStore @Inject constructor(
     }
 
     suspend fun clearSession() {
-        context.dataStore.edit { it.clear() }
+        // Preserve the stable per-install device id across logout so re-registering the
+        // FCM token after the next login still dedupes correctly against past devices.
+        val deviceId = context.dataStore.data.map { it[Keys.DEVICE_ID] }.first()
+        context.dataStore.edit { prefs ->
+            prefs.clear()
+            if (deviceId != null) prefs[Keys.DEVICE_ID] = deviceId
+        }
+    }
+
+    /** Returns a stable per-install identifier, generating and persisting one on first use. */
+    suspend fun getOrCreateDeviceId(): String {
+        val existing = context.dataStore.data.map { it[Keys.DEVICE_ID] }.first()
+        if (existing != null) return existing
+        val generated = UUID.randomUUID().toString()
+        context.dataStore.edit { it[Keys.DEVICE_ID] = generated }
+        return generated
+    }
+
+    suspend fun savePendingFcmToken(token: String) {
+        context.dataStore.edit { it[Keys.PENDING_FCM_TOKEN] = token }
+    }
+
+    suspend fun markFcmTokenRegistered(token: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.REGISTERED_FCM_TOKEN] = token
+            prefs.remove(Keys.PENDING_FCM_TOKEN)
+        }
+    }
+
+    suspend fun clearFcmTokenState() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.PENDING_FCM_TOKEN)
+            prefs.remove(Keys.REGISTERED_FCM_TOKEN)
+        }
     }
 }

@@ -59,8 +59,7 @@ class DoctorViewModel @Inject constructor(
             _searchQuery
                 .debounce(500)
                 .distinctUntilChanged()
-                .collect { query ->
-                    _uiState.update { it.copy(searchQuery = query) }
+                .collect {
                     loadDoctors()
                 }
         }
@@ -89,6 +88,12 @@ class DoctorViewModel @Inject constructor(
     }
 
     fun onSearchQueryChange(query: String) {
+        // Update the visible text immediately so the field always reflects what the
+        // user typed. The debounced _searchQuery flow (below) only gates when the
+        // actual network search is triggered - it must not be the source of truth
+        // for the TextField's value, or unrelated uiState updates (favorites/specialty/
+        // loading) that land while typing will snap the field back to a stale value.
+        _uiState.update { it.copy(searchQuery = query) }
         _searchQuery.value = query
     }
 

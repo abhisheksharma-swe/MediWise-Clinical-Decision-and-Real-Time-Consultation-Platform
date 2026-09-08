@@ -16,8 +16,7 @@ import java.util.UUID;
 @Component
 public class JwtUtil {
 
-    @Value("${application.jwt.secret}")
-    private String secret;
+    private final JwtSecretProvider secretProvider;
 
     @Value("${application.jwt.expiration}")
     private long accessExpiration;
@@ -25,7 +24,12 @@ public class JwtUtil {
     @Value("${application.jwt.refresh-expiration}")
     private long refreshExpiration;
 
+    public JwtUtil(JwtSecretProvider secretProvider) {
+        this.secretProvider = secretProvider;
+    }
+
     private SecretKey getSignKey() {
+        String secret = secretProvider.getSecret();
         byte[] keyBytes;
         try {
             keyBytes = Decoders.BASE64.decode(secret);

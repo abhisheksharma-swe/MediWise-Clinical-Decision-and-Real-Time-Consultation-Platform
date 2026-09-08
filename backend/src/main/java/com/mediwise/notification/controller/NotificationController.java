@@ -3,20 +3,19 @@ package com.mediwise.notification.controller;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.response.ApiResponse;
 import com.mediwise.common.response.PagedResponse;
+import com.mediwise.notification.dto.FcmTokenRequest;
 import com.mediwise.notification.model.Notification;
 import com.mediwise.notification.repository.NotificationRepository;
+import com.mediwise.notification.service.DeviceTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
-import com.mediwise.notification.dto.FcmTokenRequest;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -25,9 +24,7 @@ import com.mediwise.notification.dto.FcmTokenRequest;
 public class NotificationController {
 
     private final NotificationRepository notificationRepository;
-    
-    @Autowired(required = false)
-    private RedisTemplate<String, Object> redisTemplate;
+    private final DeviceTokenService deviceTokenService;
 
     @GetMapping
     @Operation(summary = "Get notification feed")
@@ -64,13 +61,26 @@ public class NotificationController {
     }
 
     @PostMapping("/fcm-token")
-    @Operation(summary = "Register FCM device token")
+    @Operation(summary = "Register FCM device token for this device (multi-device safe)")
     public ResponseEntity<ApiResponse<Void>> registerToken(
             @AuthenticationPrincipal User user,
             @RequestBody FcmTokenRequest request) {
-        if (redisTemplate != null && request.getFcmToken() != null && !request.getFcmToken().isBlank()) {
-            redisTemplate.opsForValue().set("fcm_token:" + user.getId(), request.getFcmToken());
-        }
+        deviceTokenService.register(
+                user.getId(), request.getFcmToken(), request.getDeviceId(),
+                request.getPlatform(), request.getAppVersion());
         return ResponseEntity.ok(ApiResponse.message("FCM token registered"));
+    }
+
+    @DeleteMapping("/fcm-token")
+    @Operation(summary = "Unregister this device's FCM token (call on logout)")
+    public ResponseEntity<ApiResponse<Void>> unregisterToken(
+            @AuthenticationPrincipal User user,
+            @RequestBody(required = false) FcmTokenRequest request) {
+        if (request != null && request.getFcmToken() != null && !request.getFcmToken().isBlank()) {
+            deviceTokenService.unregister(request.getFcmToken());
+        } else if (request != null && request.getDeviceId() != null && !request.getDeviceId().isBlank()) {
+            deviceTokenService.unregisterDevice(user.getId(), request.getDeviceId());
+        }
+        return ResponseEntity.ok(ApiResponse.message("FCM token unregistered"));
     }
 }

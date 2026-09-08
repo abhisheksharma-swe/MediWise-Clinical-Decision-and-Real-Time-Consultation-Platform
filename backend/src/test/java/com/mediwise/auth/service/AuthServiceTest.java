@@ -17,7 +17,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -48,6 +51,12 @@ class AuthServiceTest {
     @Mock
     private com.mediwise.doctor.repository.DoctorRepository doctorRepository;
 
+    @Mock
+    private RedisTemplate<String, Object> redisTemplate;
+
+    @Mock
+    private ValueOperations<String, Object> valueOperations;
+
     @InjectMocks
     private AuthService authService;
 
@@ -56,6 +65,13 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        // AuthService's @Autowired(required=false) redisTemplate field isn't part of
+        // the Lombok-generated constructor, so Mockito's constructor-injection strategy
+        // for @InjectMocks never reaches it — wire it in manually, same as RazorpayServiceTest
+        // does for its @Value fields.
+        ReflectionTestUtils.setField(authService, "redisTemplate", redisTemplate);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
         sampleUserId = UUID.randomUUID();
         sampleUser = User.builder()
                 .id(sampleUserId)
@@ -205,7 +221,8 @@ class AuthServiceTest {
         when(passwordEncoder.matches("wrongpassword", "hashedPassword123")).thenReturn(false);
 
         UnauthorizedException exception = assertThrows(UnauthorizedException.class, () -> authService.login(request));
-        assertEquals("Incorrect password. Please try again.", exception.getMessage());
+        // Deliberately generic — must not reveal whether the account exists (enumeration).
+        assertEquals("Invalid email/phone or password.", exception.getMessage());
     }
 
     @Test
@@ -292,10 +309,14 @@ class AuthServiceTest {
     void testResetPasswordSuccess() {
         ResetPasswordRequest request = ResetPasswordRequest.builder()
                 .emailOrPhone("test@mediwise.com")
+                .token("123456")
                 .newPassword("newPassword456")
                 .build();
 
         when(userRepository.findByIdentifier("test@mediwise.com")).thenReturn(Optional.of(sampleUser));
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("pwreset:attempts:test@mediwise.com")).thenReturn(null);
+        when(valueOperations.get("pwreset:otp:test@mediwise.com")).thenReturn("123456");
         when(passwordEncoder.encode("newPassword456")).thenReturn("newHashedPassword");
 
         authService.resetPassword(request);

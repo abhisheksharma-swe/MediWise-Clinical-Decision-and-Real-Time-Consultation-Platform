@@ -34,6 +34,9 @@ abstract class RepositoryModule {
     abstract fun bindChatRepository(impl: ChatRepositoryImpl): ChatRepository
 
     @Binds @Singleton
+    abstract fun bindCallRepository(impl: CallRepositoryImpl): CallRepository
+
+    @Binds @Singleton
     abstract fun bindSlotRepository(impl: SlotRepositoryImpl): SlotRepository
 
     @Binds @Singleton

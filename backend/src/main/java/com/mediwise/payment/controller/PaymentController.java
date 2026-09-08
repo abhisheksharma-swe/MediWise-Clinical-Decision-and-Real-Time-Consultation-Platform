@@ -37,8 +37,10 @@ public class PaymentController {
     @PostMapping("/verify")
     @Operation(summary = "Verify payment after Razorpay checkout")
     public ResponseEntity<ApiResponse<PaymentResponse>> verifyPayment(
-            @Valid @RequestBody VerifyPaymentRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(razorpayService.verifyAndConfirmPayment(request)));
+            @Valid @RequestBody VerifyPaymentRequest request,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                razorpayService.verifyAndConfirmPayment(request, user.getId())));
     }
 
     @PostMapping("/webhook")

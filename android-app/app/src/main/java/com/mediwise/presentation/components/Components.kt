@@ -20,6 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MedicalServices
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VideoCall
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 // ── MediWise Pill Button (Primary) ──────────────────────────────────────────
@@ -152,7 +160,6 @@ fun MediWiseInputField(
 @Composable
 fun MediWiseSocialRow(
     onGoogleClick: () -> Unit,
-    onFacebookClick: () -> Unit,
     onBiometricClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -175,26 +182,6 @@ fun MediWiseSocialRow(
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFEA4335)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(20.dp))
-
-        // Facebook Button
-        Surface(
-            onClick = onFacebookClick,
-            shape = CircleShape,
-            color = SurfaceWhite,
-            border = BorderStroke(1.dp, SocialBorder),
-            modifier = Modifier.size(52.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = "f",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1877F2)
                 )
             }
         }
@@ -365,13 +352,13 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
 
 // ── Empty State ────────────────────────────────────────────────────────────
 @Composable
-fun EmptyStateCard(icon: String, title: String, subtitle: String, modifier: Modifier = Modifier) {
+fun EmptyStateCard(icon: ImageVector, title: String, subtitle: String, modifier: Modifier = Modifier) {
     AppCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(icon, style = MaterialTheme.typography.displayMedium)
+            Icon(icon, contentDescription = null, tint = TextSecondary.copy(alpha = 0.5f), modifier = Modifier.size(40.dp))
             Spacer(Modifier.height(12.dp))
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
@@ -380,12 +367,49 @@ fun EmptyStateCard(icon: String, title: String, subtitle: String, modifier: Modi
     }
 }
 
-// ── Quick Action Card ──────────────────────────────────────────────────────
+// ── Error State ────────────────────────────────────────────────────────────
 @Composable
-fun QuickActionCard(action: Any, onClick: () -> Unit) {
+fun ErrorStateCard(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null
+) {
+    AppCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(40.dp))
+            Spacer(Modifier.height(12.dp))
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = TextSecondary, textAlign = TextAlign.Center)
+            if (onRetry != null) {
+                Spacer(Modifier.height(16.dp))
+                MediWiseSecondaryPillButton(text = "Retry", onClick = onRetry)
+            }
+        }
+    }
+}
+
+// ── Quick Action Card ──────────────────────────────────────────────────────
+data class QuickActionItem(val icon: ImageVector, val label: String, val route: String)
+
+@Composable
+fun QuickActionCard(action: QuickActionItem, onClick: () -> Unit) {
     AppCard(onClick = onClick, modifier = Modifier.width(80.dp)) {
-        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("❓", style = MaterialTheme.typography.headlineMedium)
+        Column(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(action.icon, contentDescription = action.label, tint = PrimaryBlue, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(
+                action.label,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                color = TextPrimary
+            )
         }
     }
 }
@@ -434,7 +458,7 @@ fun DoctorCard(doctor: Doctor, onClick: () -> Unit, modifier: Modifier = Modifie
 
 // ── Appointment Summary Card ───────────────────────────────────────────────
 @Composable
-fun AppointmentSummaryCard(appt: Appointment, modifier: Modifier = Modifier) {
+fun AppointmentSummaryCard(appt: Appointment, modifier: Modifier = Modifier, onJoinClick: (() -> Unit)? = null) {
     AppCard(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -447,6 +471,12 @@ fun AppointmentSummaryCard(appt: Appointment, modifier: Modifier = Modifier) {
                 Text(appt.date, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
             StatusChip(status = appt.status)
+            if (onJoinClick != null) {
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onJoinClick) {
+                    Icon(Icons.Default.VideoCall, contentDescription = "Join consultation", tint = PrimaryBlue)
+                }
+            }
         }
     }
 }
@@ -466,32 +496,46 @@ fun StatusChip(status: String) {
 }
 
 // ── Bottom Navigation Bar ──────────────────────────────────────────────────
+private data class BottomTab(val label: String, val icon: ImageVector, val route: String)
+
 @Composable
 fun ClinicalBottomBar(
     navController: androidx.navigation.NavController,
     currentRoute: String,
+    role: com.mediwise.domain.model.Role? = null,
     onTabReselected: (String) -> Unit = {}
 ) {
-    val items = listOf(
-        Triple("Home", "🏠", com.mediwise.presentation.navigation.Screen.Home.route),
-        Triple("Doctors", "👨‍⚕️", com.mediwise.presentation.navigation.Screen.DoctorList.route),
-        Triple("Appointments", "📅", com.mediwise.presentation.navigation.Screen.Appointments.route),
-        Triple("Profile", "👤", com.mediwise.presentation.navigation.Screen.Profile.route)
-    )
+    // Browsing/booking other doctors is a patient-only concept; a doctor's equivalent
+    // primary action is managing their own schedule, which already exists as a fully
+    // separate, correct screen (DoctorScheduleScreen) rather than duplicated here.
+    val items = if (role == com.mediwise.domain.model.Role.DOCTOR) {
+        listOf(
+            BottomTab("Home", Icons.Default.Home, com.mediwise.presentation.navigation.Screen.Home.route),
+            BottomTab("Schedule", Icons.Default.CalendarMonth, com.mediwise.presentation.navigation.Screen.DoctorSchedule.route),
+            BottomTab("Profile", Icons.Default.Person, com.mediwise.presentation.navigation.Screen.Profile.route)
+        )
+    } else {
+        listOf(
+            BottomTab("Home", Icons.Default.Home, com.mediwise.presentation.navigation.Screen.Home.route),
+            BottomTab("Doctors", Icons.Default.MedicalServices, com.mediwise.presentation.navigation.Screen.DoctorList.route),
+            BottomTab("Appointment", Icons.Default.CalendarMonth, com.mediwise.presentation.navigation.Screen.Appointments.route),
+            BottomTab("Profile", Icons.Default.Person, com.mediwise.presentation.navigation.Screen.Profile.route)
+        )
+    }
 
     NavigationBar(containerColor = SurfaceWhite) {
-        items.forEach { (label, icon, route) ->
+        items.forEach { tab ->
             NavigationBarItem(
-                selected = currentRoute == route,
+                selected = currentRoute == tab.route,
                 onClick = {
-                    if (currentRoute == route) {
-                        onTabReselected(route)
+                    if (currentRoute == tab.route) {
+                        onTabReselected(tab.route)
                     } else {
-                        navController.navigateToMainTab(route)
+                        navController.navigateToMainTab(tab.route)
                     }
                 },
-                icon = { Text(icon, style = MaterialTheme.typography.titleMedium) },
-                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                icon = { Icon(tab.icon, contentDescription = tab.label) },
+                label = { Text(tab.label, style = MaterialTheme.typography.labelSmall) },
                 colors = NavigationBarItemDefaults.colors(indicatorColor = PrimaryBlueLight)
             )
         }

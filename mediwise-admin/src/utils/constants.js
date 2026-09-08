@@ -29,4 +29,8 @@ export const ROUTES = {
   APPOINTMENTS: '/appointments',
   ASSIGN_DOCTOR: '/assign-doctor',
   AUDIT_LOGS: '/audit-logs',
+  ANALYTICS: '/analytics',
+  NOTIFICATIONS: '/notifications',
+  PROFILE: '/profile',
+  CHAT: '/chat/:roomId',
 }

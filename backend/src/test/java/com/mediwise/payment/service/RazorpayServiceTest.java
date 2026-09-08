@@ -4,6 +4,7 @@ import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.PaymentException;
+import com.mediwise.common.exception.UnauthorizedException;
 import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.payment.dto.InitiatePaymentRequest;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.crypto.Mac;
@@ -60,6 +62,8 @@ class RazorpayServiceTest {
         private DoctorRepository doctorRepository;
         @Mock
         private PatientProfileRepository patientProfileRepository;
+        @Mock
+        private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
         private RazorpayService razorpayService;
@@ -211,6 +215,7 @@ class RazorpayServiceTest {
                         .gatewayOrderId(orderId)
                         .build();
 
+                stubOwningPatient();
                 when(paymentRepository.findByGatewayOrderId(orderId))
                         .thenReturn(Optional.of(initiatedPayment));
                 when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -219,7 +224,7 @@ class RazorpayServiceTest {
                 when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 // Act
-                PaymentResponse response = razorpayService.verifyAndConfirmPayment(request);
+                PaymentResponse response = razorpayService.verifyAndConfirmPayment(request, patientId);
 
                 // Assert payment is SUCCESS
                 assertThat(response.getStatus()).isEqualTo(Payment.PaymentStatus.SUCCESS);
@@ -244,16 +249,18 @@ class RazorpayServiceTest {
                 Payment initiatedPayment = Payment.builder()
                         .id(UUID.randomUUID())
                         .appointmentId(appointmentId)
+                        .patientId(patientProfileId)
                         .status(Payment.PaymentStatus.INITIATED)
                         .gatewayOrderId("order_real")
                         .build();
 
+                stubOwningPatient();
                 when(paymentRepository.findByGatewayOrderId("order_real"))
                         .thenReturn(Optional.of(initiatedPayment));
                 when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
                 // Act & Assert
-                assertThatThrownBy(() -> razorpayService.verifyAndConfirmPayment(request))
+                assertThatThrownBy(() -> razorpayService.verifyAndConfirmPayment(request, patientId))
                         .isInstanceOf(PaymentException.class)
                         .hasMessageContaining("verification failed");
 
@@ -262,6 +269,35 @@ class RazorpayServiceTest {
 
                 // Payment must be recorded as FAILED (audit trail for fraud investigation)
                 verify(paymentRepository).save(argThat(p -> p.getStatus() == Payment.PaymentStatus.FAILED));
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────
+        // TEST: A user who doesn't own this payment cannot verify it (IDOR guard)
+        // ─────────────────────────────────────────────────────────────────────────
+        @Test
+        @DisplayName("verifyAndConfirmPayment: rejects a caller who does not own the payment's appointment")
+        void verifyAndConfirmPayment_rejectsNonOwner() {
+                VerifyPaymentRequest request = new VerifyPaymentRequest();
+                request.setRazorpayOrderId("order_someone_elses");
+                request.setRazorpayPaymentId("pay_123");
+                request.setRazorpaySignature("whatever");
+
+                Payment someoneElsesPayment = Payment.builder()
+                        .id(UUID.randomUUID())
+                        .appointmentId(UUID.randomUUID())
+                        .patientId(UUID.randomUUID()) // NOT patientProfileId
+                        .status(Payment.PaymentStatus.INITIATED)
+                        .gatewayOrderId("order_someone_elses")
+                        .build();
+
+                stubOwningPatient(); // resolves patientId -> patientProfileId, which won't match
+                when(paymentRepository.findByGatewayOrderId("order_someone_elses"))
+                        .thenReturn(Optional.of(someoneElsesPayment));
+
+                assertThatThrownBy(() -> razorpayService.verifyAndConfirmPayment(request, patientId))
+                        .isInstanceOf(UnauthorizedException.class);
+
+                verify(paymentRepository, never()).save(any());
         }
 
         // ─────────────────────────────────────────────────────────────────────────

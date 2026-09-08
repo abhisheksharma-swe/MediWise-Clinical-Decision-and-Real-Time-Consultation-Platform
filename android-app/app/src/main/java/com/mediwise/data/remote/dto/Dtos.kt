@@ -69,6 +69,8 @@ data class DoctorDto(
 @Serializable
 data class AppointmentDto(
     val id: String, val patientId: String, val doctorId: String,
+    val patientUserId: String? = null, val doctorUserId: String? = null,
+    val patientName: String? = null,
     val doctorName: String? = null, val doctorSpecialty: String? = null, val doctorProfileImage: String? = null,
     val slotId: String, val slotDate: String? = null,
     val slotStartTime: String? = null, val slotEndTime: String? = null,
@@ -79,6 +81,7 @@ data class AppointmentDto(
 )
 @Serializable data class BookAppointmentRequestDto(val slotId: String, val doctorId: String, val type: String = "ONLINE", val chiefComplaint: String? = null)
 @Serializable data class CancelRequestDto(val reason: String? = null)
+@Serializable data class CompleteAppointmentRequestDto(val notes: String, val diagnosis: String? = null, val prescription: String? = null)
 
 @Serializable
 data class SlotDto(
@@ -106,17 +109,58 @@ data class PaymentDto(
     val currency: String = "INR",
     val status: String,
     val gatewayOrderId: String? = null,
-    val gatewayPaymentId: String? = null
+    val gatewayPaymentId: String? = null,
+    val keyId: String? = null
 )
 @Serializable data class InitiatePaymentRequestDto(val appointmentId: String, val amount: String? = null)
 @Serializable data class VerifyPaymentRequestDto(val razorpayOrderId: String, val razorpayPaymentId: String, val razorpaySignature: String)
 
-@Serializable data class ProfileDto(val id: String? = null, val userId: String? = null, val fullName: String? = null, val dob: String? = null, val bloodType: String? = null, val gender: String? = null, val address: String? = null, val emergencyContact: String? = null, val profileImage: String? = null)
+@Serializable
+data class UpdateDoctorProfileRequestDto(
+    val fullName: String? = null,
+    val specialty: String? = null,
+    val bio: String? = null,
+    val experienceYears: Int? = null,
+    val consultationFee: Double? = null,
+    val available: Boolean? = null
+)
+
+@Serializable data class ProfileDto(val id: String? = null, val userId: String? = null, val fullName: String? = null, val phone: String? = null, val dob: String? = null, val bloodType: String? = null, val gender: String? = null, val address: String? = null, val emergencyContact: String? = null, val profileImage: String? = null)
 @Serializable data class UpdateProfileRequestDto(val fullName: String? = null, val dob: String? = null, val bloodType: String? = null, val gender: String? = null, val address: String? = null, val emergencyContact: String? = null)
 
 @Serializable data class NotificationDto(val id: String, val title: String, val body: String? = null, val type: String, val read: Boolean = false, val sentAt: String? = null)
 
-@Serializable data class ChatMessageDto(val id: String? = null, val roomId: String, val senderId: String, val senderRole: String, val content: String, val contentType: String = "TEXT", val sentAt: String? = null, val read: Boolean = false)
+@Serializable
+data class FcmTokenRequestDto(
+    val fcmToken: String,
+    val deviceId: String? = null,
+    val platform: String? = "ANDROID",
+    val appVersion: String? = null
+)
+
+@Serializable data class ChatMessageDto(val id: String? = null, val roomId: String, val senderId: String, val senderRole: String, val content: String, val contentType: String = "TEXT", val mediaUrl: String? = null, val sentAt: String? = null, val read: Boolean = false)
+
+@Serializable data class ChatMediaUploadResponseDto(val url: String, val contentType: String, val originalFilename: String? = null)
+
+/** STOMP /app/chat.send payload - mirrors the backend's SendMessageRequest{roomId,content,contentType,mediaUrl}. */
+@Serializable data class StompSendMessageDto(val roomId: String, val content: String, val contentType: String = "TEXT", val mediaUrl: String? = null)
+
+/** STOMP /app/chat.typing payload - mirrors the backend's TypingEvent{roomId,senderId,typing}. */
+@Serializable data class StompTypingDto(val roomId: String, val senderId: String, val typing: Boolean)
+
+/**
+ * STOMP call payload and /user/queue/call broadcast shape - mirrors the backend's
+ * CallSignalMessage{type,roomId,senderId,recipientId,payload}. `senderId` is set by the
+ * server from the STOMP principal on every inbound signal, so the client only ever fills
+ * it in on outbound sends as a formality (the server overwrites it regardless).
+ */
+@Serializable data class CallSignalDto(
+    val type: String,
+    val roomId: String,
+    val senderId: String = "",
+    val recipientId: String,
+    val payload: String? = null
+)
 
 @Serializable
 data class AppConfigDto(
@@ -162,6 +206,7 @@ data class AiReportDto(
     val confidence: Double = 0.0,
     val recommendation: String? = null,
     val riskFactors: List<String> = emptyList(),
+    val matchedDoctors: List<DoctorDto> = emptyList(),
     val createdAt: String? = null
 )
 
@@ -178,20 +223,37 @@ fun DoctorDto.toDomain() = com.mediwise.domain.model.Doctor(
     avgRating = avgRating ?: 0.0,
     totalReviews = totalReviews,
     experienceYears = experienceYears ?: 0,
-    isAvailable = available
+    isAvailable = available,
+    verified = verified
 )
 
 fun AppointmentDto.toDomain() = com.mediwise.domain.model.Appointment(
     id = id,
     patientId = patientId,
     doctorId = doctorId,
+    patientName = patientName ?: "",
     doctorName = doctorName ?: "",
     doctorSpecialty = doctorSpecialty ?: "",
     slotId = slotId,
     date = slotDate ?: "",
     time = if (slotStartTime != null && slotEndTime != null) "$slotStartTime - $slotEndTime" else (slotStartTime ?: ""),
     status = status,
-    type = type
+    type = type,
+    chiefComplaint = chiefComplaint ?: "",
+    patientUserId = patientUserId ?: "",
+    doctorUserId = doctorUserId ?: ""
+)
+
+fun AppointmentDto.toConsultationRecord() = com.mediwise.domain.model.ConsultationRecord(
+    id = id,
+    patientId = patientId,
+    doctorName = doctorName ?: "Doctor",
+    doctorSpecialty = doctorSpecialty ?: "",
+    date = slotDate ?: createdAt?.take(10) ?: "",
+    chiefComplaint = chiefComplaint ?: "",
+    notes = notes ?: "",
+    diagnosis = diagnosis ?: "",
+    prescription = prescription ?: ""
 )
 
 fun SlotDto.toDomain() = com.mediwise.domain.model.SlotModel(
@@ -216,7 +278,7 @@ fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = com.me
     id = id ?: "",
     fullName = fullName ?: "",
     email = email,
-    phone = phone,
+    phone = this.phone?.takeIf { it.isNotBlank() } ?: phone,
     dateOfBirth = dob ?: "",
     gender = gender ?: "",
     bloodType = bloodType ?: "",
@@ -224,16 +286,27 @@ fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = com.me
     emergencyContact = emergencyContact ?: "",
     profileImageUrl = profileImage
 )
-fun NotificationDto.toDomain() = com.mediwise.domain.model.Notification(id = id, title = title, body = body ?: "", type = type, isRead = read, time = sentAt ?: "")
-fun ChatMessageDto.toDomain() = com.mediwise.domain.model.ChatMessage(id = id ?: "", senderId = senderId, content = content, time = sentAt ?: "", isMe = false)
+
 fun AiReportDto.toDomain() = com.mediwise.domain.model.AiTriageReport(
     id = id ?: "",
     patientId = patientId ?: "",
+    appointmentId = appointmentId,
     urgencyScore = urgencyScore,
     suggestedSpecialty = suggestedSpecialty ?: "",
     confidence = confidence,
     recommendation = recommendation ?: "",
     riskFactors = riskFactors,
+    matchedDoctors = matchedDoctors.map { it.toDomain() },
     createdAt = createdAt ?: ""
+)
+fun NotificationDto.toDomain() = com.mediwise.domain.model.Notification(id = id, title = title, body = body ?: "", type = type, isRead = read, time = sentAt ?: "")
+fun ChatMessageDto.toDomain() = com.mediwise.domain.model.ChatMessage(
+    id = id ?: "",
+    senderId = senderId,
+    content = content,
+    time = sentAt ?: "",
+    isMe = false,
+    contentType = com.mediwise.domain.model.ChatContentType.entries.firstOrNull { it.name == contentType } ?: com.mediwise.domain.model.ChatContentType.TEXT,
+    mediaUrl = mediaUrl
 )
 

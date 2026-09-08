@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,63 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services)
+}
+
+// ── Environment configuration ────────────────────────────────────────────
+// Resolution order for every property below: Gradle project property (-Pname=...
+// or CI-injected gradle.properties) > local.properties (untracked, developer machine
+// only) > environment variable > debug-only hardcoded fallback.
+//
+// Required developer/CI setup for a RELEASE build (see local.properties, which is
+// gitignored, or inject via env vars / -P flags in CI):
+//   RELEASE_BASE_URL=https://your.api.host/
+//   RELEASE_WS_URL=wss://your.api.host/ws
+//   RELEASE_GOOGLE_WEB_CLIENT_ID=<Firebase OAuth web client id>
+// Debug builds fall back to a LAN default if DEBUG_* properties are not set.
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun resolveProperty(name: String): String? =
+    (project.findProperty(name) as String?)
+        ?.takeIf { it.isNotBlank() }
+        ?: localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
+val placeholderBaseUrl = "https://api.clinicalsystem.com/"
+val placeholderClientId = "REPLACE_WITH_FIREBASE_WEB_CLIENT_ID"
+
+val debugBaseUrl = resolveProperty("DEBUG_BASE_URL") ?: "http://192.168.137.1:8080/"
+val debugWsUrl = resolveProperty("DEBUG_WS_URL") ?: "ws://192.168.137.1:8080/ws"
+val debugGoogleWebClientId = resolveProperty("DEBUG_GOOGLE_WEB_CLIENT_ID") ?: placeholderClientId
+
+val releaseBaseUrl = resolveProperty("RELEASE_BASE_URL")
+val releaseWsUrl = resolveProperty("RELEASE_WS_URL")
+val releaseGoogleWebClientId = resolveProperty("RELEASE_GOOGLE_WEB_CLIENT_ID")
+
+fun validateReleaseConfig() {
+    val problems = mutableListOf<String>()
+    if (releaseBaseUrl.isNullOrBlank() || releaseBaseUrl == placeholderBaseUrl) {
+        problems += "RELEASE_BASE_URL is missing or still the placeholder ($placeholderBaseUrl). Set it via -PRELEASE_BASE_URL=, local.properties, or an env var."
+    } else if (!releaseBaseUrl.startsWith("https://")) {
+        problems += "RELEASE_BASE_URL must use https://, got: $releaseBaseUrl"
+    }
+    if (releaseWsUrl.isNullOrBlank()) {
+        problems += "RELEASE_WS_URL is missing. Set it via -PRELEASE_WS_URL=, local.properties, or an env var."
+    } else if (!releaseWsUrl.startsWith("wss://")) {
+        problems += "RELEASE_WS_URL must use wss://, got: $releaseWsUrl"
+    }
+    if (releaseGoogleWebClientId.isNullOrBlank() || releaseGoogleWebClientId == placeholderClientId) {
+        problems += "RELEASE_GOOGLE_WEB_CLIENT_ID is missing or still the placeholder. Set it via -PRELEASE_GOOGLE_WEB_CLIENT_ID=, local.properties, or an env var."
+    }
+    if (problems.isNotEmpty()) {
+        throw GradleException(
+            "Release build configuration is invalid:\n" + problems.joinToString("\n") { "  - $it" }
+        )
+    }
 }
 
 android {
@@ -19,20 +78,24 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
-
-        buildConfigField("String", "BASE_URL", "\"http://10.121.186.102:8080/\"")
-        buildConfigField("String", "WS_URL", "\"ws://10.121.186.102:8080/ws\"")
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"REPLACE_WITH_FIREBASE_WEB_CLIENT_ID\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BASE_URL", "\"$debugBaseUrl\"")
+            buildConfigField("String", "WS_URL", "\"$debugWsUrl\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$debugGoogleWebClientId\"")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "BASE_URL", "\"https://api.clinicalsystem.com/\"")
-            buildConfigField("String", "WS_URL", "\"wss://api.clinicalsystem.com/ws\"")
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"REPLACE_WITH_FIREBASE_WEB_CLIENT_ID\"")
+            // Fall back to placeholders so configuration never fails for non-release tasks
+            // (e.g. `compileDebugKotlin`); validateReleaseConfig() below fails the build the
+            // moment a release task actually runs with incomplete/placeholder configuration.
+            buildConfigField("String", "BASE_URL", "\"${releaseBaseUrl ?: placeholderBaseUrl}\"")
+            buildConfigField("String", "WS_URL", "\"${releaseWsUrl ?: "wss://REPLACE_ME/ws"}\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${releaseGoogleWebClientId ?: placeholderClientId}\"")
         }
     }
 
@@ -48,6 +111,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+// Validate release configuration lazily, right before a release task executes, so debug
+// builds (and plain `./gradlew tasks`) are never blocked by missing release secrets.
+tasks.whenTaskAdded {
+    if (name.contains("Release")) {
+        doFirst { validateReleaseConfig() }
     }
 }
 
@@ -122,4 +193,15 @@ dependencies {
 
     // Razorpay
     implementation(libs.razorpay)
+
+    // Biometric
+    implementation(libs.androidx.biometric)
+
+    // WorkManager + Hilt Worker support
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
+    // WebRTC (audio/video calling)
+    implementation(libs.stream.webrtc.android)
 }

@@ -9,6 +9,8 @@ import {
   CalendarIcon,
   LinkIcon,
   FileTextIcon,
+  BarChartIcon,
+  BellIcon,
 } from '../common/Icons'
 
 const NAV_ITEMS = [
@@ -18,6 +20,8 @@ const NAV_ITEMS = [
   { label: 'Patients', path: ROUTES.PATIENTS, Icon: UsersIcon },
   { label: 'Appointments', path: ROUTES.APPOINTMENTS, Icon: CalendarIcon },
   { label: 'Assign Doctor', path: ROUTES.ASSIGN_DOCTOR, Icon: LinkIcon },
+  { label: 'Analytics', path: ROUTES.ANALYTICS, Icon: BarChartIcon },
+  { label: 'Notifications', path: ROUTES.NOTIFICATIONS, Icon: BellIcon },
   { label: 'Audit Logs', path: ROUTES.AUDIT_LOGS, Icon: FileTextIcon },
 ]
 

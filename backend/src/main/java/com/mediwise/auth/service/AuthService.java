@@ -190,15 +190,14 @@ public class AuthService {
 
         } else if (request.getEmailOrPhone() != null && !request.getEmailOrPhone().isBlank()
                 && request.getPassword() != null && !request.getPassword().isBlank()) {
+            // Deliberately the same generic message for "no such account", "social-only
+            // account with no password set", and "wrong password" — distinguishing them
+            // lets an attacker enumerate which identifiers have a registered account.
             user = userRepository.findByIdentifier(request.getEmailOrPhone().trim())
-                    .orElseThrow(() -> new UnauthorizedException("No account found with this email or phone."));
+                    .orElseThrow(() -> new UnauthorizedException("Invalid email/phone or password."));
 
-            if (user.getPasswordHash() == null) {
-                throw new UnauthorizedException(
-                        "This account was created via social login. Please sign in with Google/Firebase.");
-            }
-            if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-                throw new UnauthorizedException("Incorrect password. Please try again.");
+            if (user.getPasswordHash() == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                throw new UnauthorizedException("Invalid email/phone or password.");
             }
         } else {
             throw new UnauthorizedException("Please provide either a Firebase ID token or email/phone + password.");
@@ -286,8 +285,11 @@ public class AuthService {
         }
 
         String identifier = request.getEmailOrPhone().trim();
+        // Same error as an invalid/expired code below — an unknown identifier must not
+        // be distinguishable from a real one with a wrong/expired code (enumeration).
         User user = userRepository.findByIdentifier(identifier)
-                .orElseThrow(() -> new ResourceNotFoundException("No account found with this email or phone number."));
+                .orElseThrow(() -> new BusinessException("INVALID_OR_EXPIRED_CODE",
+                        "This reset code is invalid or has expired. Please request a new one."));
 
         String otpKey = "pwreset:otp:" + user.getEmail();
         String attemptsKey = "pwreset:attempts:" + user.getEmail();

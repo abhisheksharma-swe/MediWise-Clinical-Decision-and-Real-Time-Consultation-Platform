@@ -32,9 +32,11 @@ public class ProfileService {
     private String s3BaseUrl;
 
     public PatientProfile getOrCreateProfile(User user) {
-        return profileRepository.findByUserId(user.getId())
+        PatientProfile profile = profileRepository.findByUserId(user.getId())
                 .orElseGet(() -> profileRepository.save(
                         PatientProfile.builder().userId(user.getId()).build()));
+        profile.setPhone(user.getPhone());
+        return profile;
     }
 
     @Transactional
@@ -44,9 +46,11 @@ public class ProfileService {
         if (request.getDob() != null) profile.setDob(request.getDob());
         if (request.getBloodType() != null) profile.setBloodType(request.getBloodType());
         if (request.getGender() != null) profile.setGender(request.getGender());
-        if (request.getAddress() != null) profile.setAddress(request.getAddressAsString());
-        if (request.getEmergencyContact() != null) profile.setEmergencyContact(request.getEmergencyContactAsString());
-        return profileRepository.save(profile);
+        if (request.getAddress() != null) profile.setAddress(request.getAddress());
+        if (request.getEmergencyContact() != null) profile.setEmergencyContact(request.getEmergencyContact());
+        PatientProfile saved = profileRepository.save(profile);
+        saved.setPhone(user.getPhone());
+        return saved;
     }
 
     private static final java.util.Set<String> ALLOWED_IMAGE_TYPES = java.util.Set.of(

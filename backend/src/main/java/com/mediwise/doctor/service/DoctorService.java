@@ -4,10 +4,12 @@ import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.ResourceNotFoundException;
 import com.mediwise.doctor.dto.DoctorResponse;
+import com.mediwise.doctor.dto.UpdateDoctorProfileRequest;
 import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.model.DoctorFavorite;
 import com.mediwise.doctor.repository.DoctorFavoriteRepository;
 import com.mediwise.doctor.repository.DoctorRepository;
+import com.mediwise.common.response.PagedResponse;
 import com.mediwise.profile.model.PatientProfile;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +34,7 @@ public class DoctorService {
     private final PatientProfileRepository patientProfileRepository;
 
     @Cacheable(value = "doctor_list", key = "#search + '_' + #specialty + '_' + #sortBy + '_' + #page + '_' + #size")
-    public Page<DoctorResponse> getDoctors(String search, String specialty,
+    public PagedResponse<DoctorResponse> getDoctors(String search, String specialty,
                                            String sortBy, int page, int size) {
         Sort sort = resolveSort(sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -49,7 +51,11 @@ public class DoctorService {
             doctors = doctorRepository.findByAvailableTrueAndVerifiedTrue(pageable);
         }
 
-        return doctors.map(DoctorResponse::from);
+        // Cached as a plain PagedResponse rather than Spring's Page/PageImpl —
+        // PageImpl has no default constructor, so Jackson can serialize it into
+        // Redis but can never deserialize it back out (see GlobalExceptionHandler
+        // INTERNAL_ERROR logs referencing PageImpl deserialization failures).
+        return PagedResponse.of(doctors.map(DoctorResponse::from));
     }
 
     public DoctorResponse getDoctorById(UUID id, User requester) {
@@ -61,6 +67,42 @@ public class DoctorService {
         }
 
         return DoctorResponse.from(doctor);
+    }
+
+    // ── Doctor: view/update own professional profile ──────────────────────────
+    public DoctorResponse getMyProfile(User user) {
+        Doctor doctor = doctorRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new BusinessException("DOCTOR_PROFILE_NOT_FOUND", "No doctor profile found for this account."));
+        return DoctorResponse.from(doctor);
+    }
+
+    @CacheEvict(value = "doctor_list", allEntries = true)
+    @Transactional
+    public DoctorResponse updateMyProfile(User user, UpdateDoctorProfileRequest request) {
+        Doctor doctor = doctorRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new BusinessException("DOCTOR_PROFILE_NOT_FOUND", "No doctor profile found for this account."));
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            doctor.setFullName(request.getFullName().trim());
+        }
+        if (request.getSpecialty() != null && !request.getSpecialty().isBlank()) {
+            doctor.setSpecialty(request.getSpecialty().trim());
+        }
+        if (request.getBio() != null) {
+            doctor.setBio(request.getBio());
+        }
+        if (request.getExperienceYears() != null) {
+            doctor.setExperienceYears(request.getExperienceYears());
+        }
+        if (request.getConsultationFee() != null) {
+            doctor.setConsultationFee(request.getConsultationFee());
+        }
+        if (request.getAvailable() != null) {
+            doctor.setAvailable(request.getAvailable());
+        }
+
+        Doctor saved = doctorRepository.save(doctor);
+        return DoctorResponse.from(saved);
     }
 
     private boolean canViewUnverifiedDoctor(Doctor doctor, User requester) {

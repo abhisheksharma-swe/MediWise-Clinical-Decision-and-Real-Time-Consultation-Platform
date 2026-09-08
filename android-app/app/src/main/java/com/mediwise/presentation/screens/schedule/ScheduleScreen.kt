@@ -33,7 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun ScheduleScreen(
     doctorId: String,
     onBackClick: () -> Unit,
-    onSlotSelected: (date: String, time: String) -> Unit,
+    onAppointmentBooked: (appointmentId: String) -> Unit,
     viewModel: ScheduleViewModel = hiltViewModel()
 ) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -75,31 +75,41 @@ fun ScheduleScreen(
         bottomBar = {
             if (selectedSlotModel != null) {
                 Surface(shadowElevation = 8.dp, color = SurfaceWhite) {
-                    Button(
-                        onClick = {
-                            selectedSlotModel?.let { slot ->
-                                viewModel.lockSlot(slot.id) {
-                                    onSlotSelected(selectedDate.toString(), slot.id)
-                                }
-                            }
-                        },
-                        enabled = !uiState.isLocking,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                    ) {
-                        if (uiState.isLocking) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
+                    Column {
+                        if (uiState.error != null) {
                             Text(
-                                "Confirm: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))} at ${selectedSlotModel?.startTime}",
-                                fontWeight = FontWeight.SemiBold
+                                uiState.error ?: "",
+                                color = ErrorRed,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                             )
+                        }
+                        Button(
+                            onClick = {
+                                selectedSlotModel?.let { slot ->
+                                    viewModel.lockAndBookSlot(slot.id, doctorId) { appointmentId ->
+                                        onAppointmentBooked(appointmentId)
+                                    }
+                                }
+                            },
+                            enabled = !uiState.isLocking && !uiState.isBooking,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                                .height(52.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                        ) {
+                            if (uiState.isLocking || uiState.isBooking) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Confirm: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))} at ${selectedSlotModel?.startTime}",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }

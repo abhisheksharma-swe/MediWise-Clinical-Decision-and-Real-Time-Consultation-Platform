@@ -62,4 +62,34 @@ class DoctorRepositoryImpl @Inject constructor(
             response.data?.content?.map { it.toDomain() } ?: emptyList()
         }
     }
+
+    override suspend fun getMyDoctorProfile(): Result<Doctor> {
+        return safeApiCall {
+            val response = api.getMyDoctorProfile()
+            response.data!!.toDomain()
+        }
+    }
+
+    override suspend fun updateMyDoctorProfile(
+        fullName: String?,
+        specialty: String?,
+        bio: String?,
+        experienceYears: Int?,
+        consultationFee: Double?,
+        available: Boolean?
+    ): Result<Doctor> {
+        return safeApiCall {
+            val response = api.updateMyDoctorProfile(
+                UpdateDoctorProfileRequestDto(
+                    fullName = fullName,
+                    specialty = specialty,
+                    bio = bio,
+                    experienceYears = experienceYears,
+                    consultationFee = consultationFee,
+                    available = available
+                )
+            )
+            response.data!!.toDomain()
+        }
+    }
 }

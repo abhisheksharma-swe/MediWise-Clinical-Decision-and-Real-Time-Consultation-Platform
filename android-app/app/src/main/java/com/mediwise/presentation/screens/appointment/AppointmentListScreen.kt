@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mediwise.presentation.components.EmptyStateCard
 import com.mediwise.presentation.theme.*
 
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -26,6 +27,7 @@ enum class AppointmentTab { Upcoming, Past, Cancelled }
 @Composable
 fun AppointmentListScreen(
     onAppointmentClick: (String) -> Unit,
+    onJoinClick: (String) -> Unit = {},
     refreshTick: Int = 0,
     viewModel: AppointmentViewModel = hiltViewModel()
 ) {
@@ -39,6 +41,7 @@ fun AppointmentListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = 56.dp,
                 title = { Text("My Appointments", fontWeight = FontWeight.Bold, color = TextPrimary) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundWhite)
             )
@@ -73,26 +76,21 @@ fun AppointmentListScreen(
                     }
                 } else if (uiState.appointments.isEmpty()) {
                     item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.CalendarToday, contentDescription = null,
-                                    tint = TextSecondary.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(64.dp))
-                                Spacer(Modifier.height(16.dp))
-                                Text("No ${selectedTab.name.lowercase()} appointments",
-                                    color = TextSecondary, fontSize = 16.sp)
-                            }
-                        }
+                        EmptyStateCard(
+                            icon = Icons.Default.CalendarToday,
+                            title = "No ${selectedTab.name.lowercase()} appointments",
+                            subtitle = "Appointments you book will appear here.",
+                            modifier = Modifier.padding(top = 80.dp)
+                        )
                     }
                 } else {
                     items(uiState.appointments, key = { it.id }) { appt ->
                         AppointmentCard(
                             appointment = appt,
+                            isMutating = uiState.isCancelling,
                             onClick = { onAppointmentClick(appt.id) },
-                            onCancel = { viewModel.cancelAppointment(appt.id) }
+                            onCancel = { viewModel.cancelAppointment(appt.id) },
+                            onJoin = { onJoinClick(appt.id) }
                         )
                     }
                 }
@@ -102,7 +100,13 @@ fun AppointmentListScreen(
 }
 
 @Composable
-fun AppointmentCard(appointment: Appointment, onClick: () -> Unit, onCancel: () -> Unit) {
+fun AppointmentCard(
+    appointment: Appointment,
+    onClick: () -> Unit,
+    onCancel: () -> Unit,
+    onJoin: () -> Unit = {},
+    isMutating: Boolean = false
+) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
@@ -115,10 +119,12 @@ fun AppointmentCard(appointment: Appointment, onClick: () -> Unit, onCancel: () 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text("Dr. ${appointment.doctorName}",
-                        fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
-                    Text(appointment.doctorSpecialty, fontSize = 13.sp, color = PrimaryBlue)
+                        fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(appointment.doctorSpecialty, fontSize = 13.sp, color = PrimaryBlue,
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
                 StatusBadge(appointment.status)
             }
@@ -140,26 +146,34 @@ fun AppointmentCard(appointment: Appointment, onClick: () -> Unit, onCancel: () 
                 }
             }
 
-            if (appointment.status == "CONFIRMED" || appointment.status == "PENDING") {
+            val canCancel = appointment.status == "CONFIRMED" || appointment.status == "PENDING"
+            val canJoin = appointment.status == "CONFIRMED" || appointment.status == "IN_PROGRESS"
+            if (canCancel || canJoin) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = onCancel,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Cancel", fontSize = 13.sp, color = ErrorRed)
+                    if (canCancel) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            enabled = !isMutating,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Cancel", fontSize = 13.sp, color = ErrorRed)
+                        }
                     }
-                    Button(
-                        onClick = { },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                    ) {
-                        Icon(Icons.Default.VideoCall, contentDescription = null,
-                            modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Join", fontSize = 13.sp)
+                    if (canJoin) {
+                        Button(
+                            onClick = onJoin,
+                            enabled = !isMutating,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                        ) {
+                            Icon(Icons.Default.VideoCall, contentDescription = null,
+                                modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Join", fontSize = 13.sp)
+                        }
                     }
                 }
             }

@@ -42,6 +42,12 @@ interface DoctorApi {
         @Query("size") size: Int = 10
     ): ApiResponseDto<PagedResponseDto<DoctorDto>>
 
+    @GET("api/v1/doctors/me")
+    suspend fun getMyDoctorProfile(): ApiResponseDto<DoctorDto>
+
+    @PUT("api/v1/doctors/me")
+    suspend fun updateMyDoctorProfile(@Body request: UpdateDoctorProfileRequestDto): ApiResponseDto<DoctorDto>
+
     @GET("api/v1/doctors/{id}")
     suspend fun getDoctorById(@Path("id") id: String): ApiResponseDto<DoctorDto>
 
@@ -62,12 +68,37 @@ interface AppointmentApi {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 10
     ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
+    @GET("api/v1/appointments/history")
+    suspend fun getMyConsultationHistory(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
+
+    @GET("api/v1/appointments/patient/{patientId}/history")
+    suspend fun getPatientConsultationHistory(
+        @Path("patientId") patientId: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
 
     @GET("api/v1/appointments/{id}")
     suspend fun getAppointmentById(@Path("id") id: String): ApiResponseDto<AppointmentDto>
 
     @PATCH("api/v1/appointments/{id}/cancel")
     suspend fun cancelAppointment(@Path("id") id: String, @Body request: CancelRequestDto): ApiResponseDto<AppointmentDto>
+
+    @GET("api/v1/appointments/doctor")
+    suspend fun getDoctorAppointments(
+        @Query("status") status: String? = null,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 10
+    ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
+
+    @PATCH("api/v1/appointments/{id}/start")
+    suspend fun startAppointment(@Path("id") id: String): ApiResponseDto<AppointmentDto>
+
+    @PATCH("api/v1/appointments/{id}/complete")
+    suspend fun completeAppointment(@Path("id") id: String, @Body request: CompleteAppointmentRequestDto): ApiResponseDto<AppointmentDto>
 }
 
 interface PaymentApi {
@@ -101,7 +132,10 @@ interface NotificationApi {
     suspend fun markAllRead(): ApiResponseDto<Unit>
 
     @POST("api/v1/notifications/fcm-token")
-    suspend fun registerFcmToken(@Body token: String): ApiResponseDto<Unit>
+    suspend fun registerFcmToken(@Body request: FcmTokenRequestDto): ApiResponseDto<Unit>
+
+    @HTTP(method = "DELETE", path = "api/v1/notifications/fcm-token", hasBody = true)
+    suspend fun unregisterFcmToken(@Body request: FcmTokenRequestDto): ApiResponseDto<Unit>
 }
 
 interface ChatApi {
@@ -111,6 +145,13 @@ interface ChatApi {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
     ): ApiResponseDto<PagedResponseDto<ChatMessageDto>>
+
+    @Multipart
+    @POST("api/v1/chat/{roomId}/media")
+    suspend fun uploadMedia(
+        @Path("roomId") roomId: String,
+        @Part file: okhttp3.MultipartBody.Part
+    ): ApiResponseDto<ChatMediaUploadResponseDto>
 }
 
 interface SlotApi {

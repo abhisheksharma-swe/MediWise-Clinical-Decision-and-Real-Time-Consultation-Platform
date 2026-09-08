@@ -3,6 +3,7 @@ package com.mediwise.chat.controller;
 import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.chat.dto.CallSignalMessage;
+import com.mediwise.chat.util.ChatRateLimiter;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
+import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,10 +23,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CallSignalingController {
 
+    // Generous limit — a normal WebRTC negotiation can legitimately burst
+    // several ICE candidates in quick succession; this only guards against
+    // abuse/loops, not real signaling traffic.
+    private static final int MAX_SIGNALS_PER_WINDOW = 60;
+    private static final Duration RATE_LIMIT_WINDOW = Duration.ofSeconds(10);
+
     private final SimpMessagingTemplate messagingTemplate;
     private final AppointmentRepository appointmentRepository;
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorRepository doctorRepository;
+    private final ChatRateLimiter rateLimiter;
 
     @MessageMapping("/call/initiate")
     public void initiateCall(@Payload CallSignalMessage message, Principal caller) {
@@ -94,6 +103,11 @@ public class CallSignalingController {
             return;
         }
 
+        if (!rateLimiter.allow("call.signal:" + message.getSenderId(), MAX_SIGNALS_PER_WINDOW, RATE_LIMIT_WINDOW)) {
+            log.warn("User {} exceeded call-signaling rate limit — {} dropped", message.getSenderId(), message.getType());
+            return;
+        }
+
         if (!areAppointmentParticipants(message.getRoomId(), message.getSenderId(), message.getRecipientId())) {
             log.warn("Signal {} rejected — sender {} and recipient {} are not both participants of room {}",
                     message.getType(), message.getSenderId(), message.getRecipientId(), message.getRoomId());
@@ -105,6 +119,8 @@ public class CallSignalingController {
                 "/queue/call",
                 message
         );
+        log.info("CALL_DELIVERED | type={} room={} from={} -> to={}",
+            message.getType(), message.getRoomId(), message.getSenderId(), message.getRecipientId());
     }
 
     private boolean areAppointmentParticipants(String roomId, String senderIdStr, String recipientIdStr) {

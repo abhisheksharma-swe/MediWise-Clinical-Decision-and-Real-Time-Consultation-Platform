@@ -24,11 +24,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.mediwise.domain.model.Doctor
 import com.mediwise.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,17 +40,20 @@ fun ProfileScreen(
     onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onConsultationHistoryClick: () -> Unit = {},
     refreshTick: Int = 0,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val profile = uiState.profile
     val context = LocalContext.current
 
     LaunchedEffect(refreshTick) {
         if (refreshTick != 0) viewModel.loadProfile()
     }
 
+    // Doctor photos have no self-service upload endpoint yet (see ProfileViewModel.uploadAvatar) —
+    // only wire up the picker for patients so tapping the avatar as a doctor does nothing silently
+    // wrong rather than nothing visible at all.
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -64,13 +69,26 @@ fun ProfileScreen(
         }
     }
 
-    val initials = remember(profile?.fullName) {
-        profile?.fullName?.split(" ")
-            ?.filter { it.isNotBlank() }
-            ?.mapNotNull { it.firstOrNull()?.toString() }
-            ?.take(2)
-            ?.joinToString("")
-            ?.uppercase() ?: "U"
+    val displayName = if (uiState.isDoctor) {
+        uiState.doctorProfile?.fullName?.ifBlank { "Doctor" } ?: "Doctor"
+    } else {
+        uiState.profile?.fullName?.ifBlank { "User" } ?: "User"
+    }
+    val subtitle = if (uiState.isDoctor) {
+        uiState.doctorProfile?.specialty?.takeIf { it.isNotBlank() } ?: "Complete your profile"
+    } else {
+        uiState.profile?.email?.takeIf { it.isNotBlank() } ?: "Complete your profile"
+    }
+    val avatarUrl = if (uiState.isDoctor) uiState.doctorProfile?.profileImage else uiState.profile?.profileImageUrl
+
+    val initials = remember(displayName) {
+        displayName.split(" ")
+            .filter { it.isNotBlank() }
+            .mapNotNull { it.firstOrNull()?.toString() }
+            .take(2)
+            .joinToString("")
+            .uppercase()
+            .ifBlank { "U" }
     }
 
     Scaffold(
@@ -130,14 +148,16 @@ fun ProfileScreen(
                                 .size(60.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha=0.22f))
-                                .clickable{
-                                    imagePickerLauncher.launch("image/*")
-                                },
+                                .then(
+                                    if (!uiState.isDoctor)
+                                        Modifier.clickable { imagePickerLauncher.launch("image/*") }
+                                    else Modifier
+                                ),
                             contentAlignment = Alignment.Center
                         ){
-                            if( !profile?.profileImageUrl.isNullOrBlank()){
+                            if (!avatarUrl.isNullOrBlank()) {
                                 AsyncImage(
-                                    model = profile.profileImageUrl,
+                                    model = avatarUrl,
                                     contentDescription = "Profile Image",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize().clip(CircleShape)
@@ -172,22 +192,35 @@ fun ProfileScreen(
                         Column(
                             modifier = Modifier.padding(start = 16.dp).weight(1f)
                         ) {
-                            Text(
-                                text = profile?.fullName?.ifBlank { "User" } ?: "User",
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 18.sp,
-                                maxLines = 1,
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (uiState.isDoctor) "Dr. $displayName" else displayName,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 18.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                if (uiState.isDoctor && uiState.doctorProfile?.verified == true) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Icon(
+                                        Icons.Default.Verified,
+                                        contentDescription = "Verified",
+                                        tint = AccentGreen,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
 
                             Spacer(Modifier.height(2.dp))
 
                             Text(
-                                text = profile?.email?.takeIf { it.isNotBlank() }
-                                    ?: "Complete your profile",
+                                text = subtitle,
                                 color = Color.White.copy(alpha = 0.78f),
                                 fontSize = 14.sp,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -227,82 +260,10 @@ fun ProfileScreen(
                 }
             }
 
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ProfileStatCard("${uiState.totalAppointments}", "Appointments", Modifier.weight(1f))
-                    ProfileStatCard("${uiState.totalDoctors}", "Doctors", Modifier.weight(1f))
-                    ProfileStatCard(profile?.bloodType?.ifBlank { "--" } ?: "--", "Blood Type", Modifier.weight(1f))
-                    ProfileStatCard(uiState.calculatedAge, "Age", Modifier.weight(1f))
-                }
-            }
-
-            item {
-                ProfileSection(title = "Health Information") {
-                    ProfileMenuItem(
-                        icon = Icons.Default.FavoriteBorder,
-                        title = "Blood Group & Vitals",
-                        subtitle = "Blood Type: ${profile?.bloodType?.ifBlank { "Not set" } ?: "Not set"}"
-                    )
-                    ProfileMenuItem(
-                        icon = Icons.Default.CalendarToday,
-                        title = "Date of Birth",
-                        subtitle = profile?.dateOfBirth?.ifBlank { "Not set" } ?: "Not set"
-                    )
-                    ProfileMenuItem(
-                        icon = Icons.Default.PersonOutline,
-                        title = "Gender",
-                        subtitle = profile?.gender?.ifBlank { "Not set" } ?: "Not set"
-                    )
-                }
-            }
-
-            item {
-                ProfileSection(title = "Contact & Emergency") {
-                    if (!profile?.address.isNullOrBlank()) {
-                        ProfileMenuItem(
-                            icon = Icons.Default.LocationOn,
-                            title = "Address",
-                            subtitle = profile?.address ?: ""
-                        )
-                    }
-                    ProfileMenuItem(
-                        icon = Icons.Default.ContactPhone,
-                        title = "Emergency Contact",
-                        subtitle = if (!profile?.emergencyContact.isNullOrBlank())
-                            "Tap to dial: ${profile?.emergencyContact}"
-                        else
-                            "Tap Edit Profile to set emergency contact",
-                        onClick = {
-                            profile?.emergencyContact?.takeIf { it.isNotBlank() }?.let { num ->
-                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num"))
-                                context.startActivity(dialIntent)
-                            } ?: onEditClick()
-                        }
-                    )
-                }
-            }
-
-            // Account & Settings Section
-            item {
-                ProfileSection(title = "Account & Preferences") {
-                    ProfileMenuItem(
-                        icon = Icons.Default.Notifications,
-                        title = "Notifications & Reminders",
-                        subtitle = "Manage appointment & chat alerts",
-                        onClick = onNotificationsClick
-                    )
-                    ProfileMenuItem(
-                        icon = Icons.Default.Settings,
-                        title = "App Settings",
-                        subtitle = "Theme, biometrics, security",
-                        onClick = onSettingsClick
-                    )
-                }
+            if (uiState.isDoctor) {
+                doctorProfileContent(uiState, onNotificationsClick, onSettingsClick)
+            } else {
+                patientProfileContent(uiState, context, onEditClick, onNotificationsClick, onSettingsClick, onConsultationHistoryClick)
             }
 
             item {
@@ -329,6 +290,196 @@ fun ProfileScreen(
                     Text("Sign Out", color = ErrorRed, fontWeight = FontWeight.SemiBold)
                 }
             }
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.patientProfileContent(
+    uiState: ProfileUiState,
+    context: android.content.Context,
+    onEditClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onConsultationHistoryClick: () -> Unit
+) {
+    val profile = uiState.profile
+
+    item {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ProfileStatCard("${uiState.totalAppointments}", "Appoint", Modifier.weight(1f))
+            ProfileStatCard("${uiState.totalDoctors}", "Doctors", Modifier.weight(1f))
+            ProfileStatCard(profile?.bloodType?.ifBlank { "--" } ?: "--", "Blood Type", Modifier.weight(1f))
+            ProfileStatCard(uiState.calculatedAge, "Age", Modifier.weight(1f))
+        }
+    }
+
+    item {
+        ProfileSection(title = "Health Information") {
+            ProfileMenuItem(
+                icon = Icons.Default.FavoriteBorder,
+                title = "Blood Group & Vitals",
+                subtitle = "Blood Type: ${profile?.bloodType?.ifBlank { "Not set" } ?: "Not set"}"
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.CalendarToday,
+                title = "Date of Birth",
+                subtitle = profile?.dateOfBirth?.ifBlank { "Not set" } ?: "Not set"
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.PersonOutline,
+                title = "Gender",
+                subtitle = profile?.gender?.ifBlank { "Not set" } ?: "Not set"
+            )
+        }
+    }
+
+    item {
+        ProfileSection(title = "Contact & Emergency") {
+            if (!profile?.phone.isNullOrBlank()) {
+                ProfileMenuItem(
+                    icon = Icons.Default.Phone,
+                    title = "Phone",
+                    subtitle = profile?.phone ?: ""
+                )
+            }
+            if (!profile?.address.isNullOrBlank()) {
+                ProfileMenuItem(
+                    icon = Icons.Default.LocationOn,
+                    title = "Address",
+                    subtitle = profile?.address ?: ""
+                )
+            }
+            ProfileMenuItem(
+                icon = Icons.Default.ContactPhone,
+                title = "Emergency Contact",
+                subtitle = if (!profile?.emergencyContact.isNullOrBlank())
+                    "Tap to dial: ${profile?.emergencyContact}"
+                else
+                    "Tap Edit Profile to set emergency contact",
+                onClick = {
+                    profile?.emergencyContact?.takeIf { it.isNotBlank() }?.let { num ->
+                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$num"))
+                        context.startActivity(dialIntent)
+                    } ?: onEditClick()
+                }
+            )
+        }
+    }
+
+    item {
+        ProfileSection(title = "Medical Records") {
+            ProfileMenuItem(
+                icon = Icons.Default.History,
+                title = "Consultation History",
+                subtitle = "View previous doctor notes, diagnoses and prescriptions",
+                onClick = onConsultationHistoryClick
+            )
+        }
+    }
+
+    item {
+        ProfileSection(title = "Account & Preferences") {
+            ProfileMenuItem(
+                icon = Icons.Default.Notifications,
+                title = "Notifications & Reminders",
+                subtitle = "Manage appointment & chat alerts",
+                onClick = onNotificationsClick
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.Settings,
+                title = "App Settings",
+                subtitle = "Theme, biometrics, security",
+                onClick = onSettingsClick
+            )
+        }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.doctorProfileContent(
+    uiState: ProfileUiState,
+    onNotificationsClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    val doctor = uiState.doctorProfile
+
+    item {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ProfileStatCard("${uiState.totalAppointments}", "Appoint", Modifier.weight(1f))
+            ProfileStatCard(
+                doctor?.avgRating?.let { "%.1f".format(it) } ?: "--",
+                "Rating",
+                Modifier.weight(1f)
+            )
+            ProfileStatCard("${doctor?.totalReviews ?: 0}", "Reviews", Modifier.weight(1f))
+            ProfileStatCard("${doctor?.experienceYears ?: 0}y", "Experience", Modifier.weight(1f))
+        }
+    }
+
+    item {
+        ProfileSection(title = "Professional Information") {
+            ProfileMenuItem(
+                icon = Icons.Default.MedicalServices,
+                title = "Specialty",
+                subtitle = doctor?.specialty?.ifBlank { "Not set" } ?: "Not set"
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.Payments,
+                title = "Consultation Fee",
+                subtitle = doctor?.consultationFee?.takeIf { it.isNotBlank() && it != "0" }
+                    ?.let { "₹$it" } ?: "Not set"
+            )
+            ProfileMenuItem(
+                icon = if (doctor?.isAvailable == true) Icons.Default.EventAvailable else Icons.Default.EventBusy,
+                title = "Availability",
+                subtitle = if (doctor?.isAvailable == true) "Accepting new bookings" else "Not accepting bookings"
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.VerifiedUser,
+                title = "Verification Status",
+                subtitle = if (doctor?.verified == true) "Verified by MediWise" else "Pending verification"
+            )
+        }
+    }
+
+    if (!doctor?.bio.isNullOrBlank()) {
+        item {
+            ProfileSection(title = "Bio") {
+                Text(
+                    doctor?.bio ?: "",
+                    fontSize = 13.sp,
+                    color = TextPrimary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+        }
+    }
+
+    item {
+        ProfileSection(title = "Account & Preferences") {
+            // "My Schedule" is intentionally not duplicated here — it's the doctor's
+            // primary bottom-nav tab (see ClinicalBottomBar), always one tap away.
+            ProfileMenuItem(
+                icon = Icons.Default.Notifications,
+                title = "Notifications & Reminders",
+                subtitle = "Manage appointment & chat alerts",
+                onClick = onNotificationsClick
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.Settings,
+                title = "App Settings",
+                subtitle = "Theme, biometrics, security",
+                onClick = onSettingsClick
+            )
         }
     }
 }

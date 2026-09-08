@@ -1,5 +1,6 @@
 package com.mediwise.payment.service;
 
+import com.mediwise.appointment.event.AppointmentConfirmedEvent;
 import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.common.exception.BusinessException;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,10 @@ public class RazorpayService {
     private final AppointmentRepository appointmentRepository;
     private final DoctorRepository doctorRepository;
     private final PatientProfileRepository patientProfileRepository;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${application.razorpay.key-id}")
+    private String keyId;
 
     @Value("${application.razorpay.key-secret}")
     private String keySecret;
@@ -89,7 +95,7 @@ public class RazorpayService {
             paymentRepository.save(existingPayment);
             log.info("Reusing existing Razorpay order {} for appointment {}",
                     existingPayment.getGatewayOrderId(), request.getAppointmentId());
-            return PaymentResponse.from(existingPayment);
+            return PaymentResponse.from(existingPayment).toBuilder().keyId(keyId).build();
         }
 
         try {
@@ -110,7 +116,7 @@ public class RazorpayService {
             log.info("Payment {} initiated | amount=₹{} | Razorpay order={}",
                     payment.getId(), authorizedAmount, payment.getGatewayOrderId());
 
-            return PaymentResponse.from(payment);
+            return PaymentResponse.from(payment).toBuilder().keyId(keyId).build();
 
         } catch (RazorpayException e) {
             throw new PaymentException("Failed to create payment order: " + e.getMessage());
@@ -119,11 +125,19 @@ public class RazorpayService {
         }
     }
 
-    // verifyAndConfirmPayment, processWebhookEvent, verifyWebhookSignature, computeHmac — all unchanged from what you pasted
     @Transactional
-    public PaymentResponse verifyAndConfirmPayment(VerifyPaymentRequest request) {
+    public PaymentResponse verifyAndConfirmPayment(VerifyPaymentRequest request, UUID requestingUserId) {
         Payment payment = paymentRepository.findByGatewayOrderId(request.getRazorpayOrderId())
                 .orElseThrow(() -> new PaymentException("Payment order not found."));
+
+        // SECURITY: only the patient who owns this payment's appointment (or an
+        // admin) may verify it — mirrors the same check already done at /initiate.
+        var ownPatientId = patientProfileRepository.findByUserId(requestingUserId)
+                .map(p -> p.getId())
+                .orElse(null);
+        if ((ownPatientId == null || !payment.getPatientId().equals(ownPatientId))) {
+            throw new UnauthorizedException("You do not have permission to verify this payment.");
+        }
 
         if (payment.getStatus() == Payment.PaymentStatus.SUCCESS) {
             log.info("Payment {} already verified — returning cached response", payment.getId());
@@ -153,6 +167,7 @@ public class RazorpayService {
                 appointment.setStatus(Appointment.AppointmentStatus.CONFIRMED);
                 appointmentRepository.save(appointment);
                 log.info("Appointment {} CONFIRMED after payment {}", appointment.getId(), payment.getId());
+                eventPublisher.publishEvent(new AppointmentConfirmedEvent(this, appointment));
             }
         });
 
@@ -190,6 +205,7 @@ public class RazorpayService {
                             appointment.setStatus(Appointment.AppointmentStatus.CONFIRMED);
                             appointmentRepository.save(appointment);
                             log.info("Appointment {} confirmed via webhook", appointment.getId());
+                            eventPublisher.publishEvent(new AppointmentConfirmedEvent(this, appointment));
                         }
                     });
                 }

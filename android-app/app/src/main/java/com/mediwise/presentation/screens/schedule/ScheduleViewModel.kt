@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.mediwise.core.result.Result
 import com.mediwise.domain.model.SlotModel
 import com.mediwise.domain.repository.DoctorRepository
+import com.mediwise.domain.usecase.appointment.BookAppointmentUseCase
 import com.mediwise.domain.usecase.schedule.GetSlotsUseCase
 import com.mediwise.domain.usecase.schedule.LockSlotUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +22,7 @@ data class ScheduleUiState(
     val isLoading: Boolean = false,
     val slots: List<SlotModel> = emptyList(),
     val isLocking: Boolean = false,
+    val isBooking: Boolean = false,
     val lockedSlotId: String? = null,
     val doctorName: String = "",
     val error: String? = null
@@ -30,6 +32,7 @@ data class ScheduleUiState(
 class ScheduleViewModel @Inject constructor(
     private val getSlotsUseCase: GetSlotsUseCase,
     private val lockSlotUseCase: LockSlotUseCase,
+    private val bookAppointmentUseCase: BookAppointmentUseCase,
     private val doctorRepository: DoctorRepository
 ) : ViewModel() {
 
@@ -61,16 +64,31 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
-    fun lockSlot(slotId: String, onLocked: (String) -> Unit) {
+    /**
+     * Locks the slot, then immediately books it (creates the PENDING appointment
+     * the backend expects to be paid within its payment window). [onBooked] is
+     * only invoked once a real appointment exists server-side — the caller
+     * navigates to Payment with a genuine appointmentId, never a fabricated one.
+     */
+    fun lockAndBookSlot(slotId: String, doctorId: String, onBooked: (appointmentId: String) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLocking = true, error = null) }
-            when (val result = lockSlotUseCase(slotId)) {
+            when (val lockResult = lockSlotUseCase(slotId)) {
                 is Result.Success -> {
-                    _uiState.update { it.copy(isLocking = false, lockedSlotId = slotId) }
-                    onLocked(slotId)
+                    _uiState.update { it.copy(isLocking = false, lockedSlotId = slotId, isBooking = true) }
+                    when (val bookResult = bookAppointmentUseCase(doctorId = doctorId, slotId = slotId, type = "ONLINE")) {
+                        is Result.Success -> {
+                            _uiState.update { it.copy(isBooking = false) }
+                            onBooked(bookResult.data.id)
+                        }
+                        is Result.Error -> {
+                            _uiState.update { it.copy(isBooking = false, error = bookResult.exception.message) }
+                        }
+                        is Result.Loading -> {}
+                    }
                 }
                 is Result.Error -> {
-                    _uiState.update { it.copy(isLocking = false, error = result.exception.message) }
+                    _uiState.update { it.copy(isLocking = false, error = lockResult.exception.message) }
                 }
                 is Result.Loading -> {}
             }

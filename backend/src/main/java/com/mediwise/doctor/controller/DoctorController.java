@@ -4,11 +4,14 @@ import com.mediwise.auth.model.User;
 import com.mediwise.common.response.ApiResponse;
 import com.mediwise.common.response.PagedResponse;
 import com.mediwise.doctor.dto.DoctorResponse;
+import com.mediwise.doctor.dto.UpdateDoctorProfileRequest;
 import com.mediwise.doctor.service.DoctorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +34,25 @@ public class DoctorController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.success(
-                PagedResponse.of(doctorService.getDoctors(search, specialty, sortBy, page, size))));
+                doctorService.getDoctors(search, specialty, sortBy, page, size)));
+    }
+
+    // ── Doctor-only: view/update own professional profile ──────────────────────
+
+    @GetMapping("/me")
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "Get the logged-in doctor's own professional profile")
+    public ResponseEntity<ApiResponse<DoctorResponse>> getMyProfile(@AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(ApiResponse.success(doctorService.getMyProfile(currentUser)));
+    }
+
+    @PutMapping("/me")
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "Update the logged-in doctor's own professional profile")
+    public ResponseEntity<ApiResponse<DoctorResponse>> updateMyProfile(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody UpdateDoctorProfileRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(doctorService.updateMyProfile(currentUser, request)));
     }
 
     @GetMapping("/{id}")

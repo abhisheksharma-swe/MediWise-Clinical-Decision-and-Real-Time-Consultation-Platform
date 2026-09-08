@@ -56,6 +56,28 @@ public class AppointmentController {
         return ResponseEntity.ok(ApiResponse.success(appointmentService.getAppointmentById(id, user)));
     }
 
+        @GetMapping("/history")
+        @Operation(summary = "Get the authenticated patient's completed consultation history")
+        public ResponseEntity<ApiResponse<PagedResponse<AppointmentResponse>>> getMyConsultationHistory(
+                        @AuthenticationPrincipal User user,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "20") int size) {
+                UUID patientId = appointmentService.getPatientIdForHistory(user);
+                return ResponseEntity.ok(ApiResponse.success(PagedResponse.of(
+                                appointmentService.getConsultationHistory(patientId, user, page, size))));
+        }
+
+        @GetMapping("/patient/{patientId}/history")
+        @Operation(summary = "Get a patient's completed consultation history for an authorized doctor")
+        public ResponseEntity<ApiResponse<PagedResponse<AppointmentResponse>>> getPatientConsultationHistory(
+                        @PathVariable UUID patientId,
+                        @AuthenticationPrincipal User user,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "20") int size) {
+                return ResponseEntity.ok(ApiResponse.success(PagedResponse.of(
+                                appointmentService.getConsultationHistory(patientId, user, page, size))));
+        }
+
     @PatchMapping("/{id}/cancel")
     @Operation(summary = "Cancel an appointment")
     public ResponseEntity<ApiResponse<AppointmentResponse>> cancel(
@@ -86,6 +108,15 @@ public class AppointmentController {
             @Valid @RequestBody CompleteAppointmentRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 appointmentService.completeAppointment(id, user, request)));
+    }
+
+    @PatchMapping("/{id}/no-show")
+    @Operation(summary = "Doctor marks the patient as a no-show (CONFIRMED → NO_SHOW)")
+    public ResponseEntity<ApiResponse<AppointmentResponse>> noShow(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ApiResponse.success(
+                appointmentService.markNoShow(id, user)));
     }
 
     @GetMapping("/doctor")

@@ -141,18 +141,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                         List.of(new SimpleGrantedAuthority("ROLE_USER")));
                                 accessor.setUser(auth);
 
-                                log.debug("STOMP CONNECT authenticated | userId={}", userId);
+                                log.info("STOMP_CONNECTED | userId={}", userId);
                             } else {
-                                log.warn("STOMP CONNECT rejected — invalid JWT");
+                                log.warn("STOMP_CONNECT_FAILED | reason=INVALID_JWT");
                                 // Returning null rejects the CONNECT frame
                                 return null;
                             }
                         } catch (Exception e) {
-                            log.warn("STOMP CONNECT JWT parse error: {}", e.getMessage());
+                            log.warn("STOMP_CONNECT_FAILED | reason=JWT_PARSE_ERROR message={}", e.getMessage());
                             return null;
                         }
                     } else {
-                        log.warn("STOMP CONNECT missing Authorization header — rejecting");
+                        log.warn("STOMP_CONNECT_FAILED | reason=MISSING_AUTHORIZATION");
                         return null;
                     }
                 }

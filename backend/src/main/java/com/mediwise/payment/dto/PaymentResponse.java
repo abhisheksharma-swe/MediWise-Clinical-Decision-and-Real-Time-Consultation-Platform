@@ -7,7 +7,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-@Data @Builder
+@Data @Builder(toBuilder = true)
 public class PaymentResponse {
     private UUID id;
     private UUID appointmentId;
@@ -17,6 +17,8 @@ public class PaymentResponse {
     private String gatewayOrderId;
     private String gatewayPaymentId;
     private int retryCount;
+    /** Razorpay's public key id — safe to expose, required by the client SDK to open Checkout. */
+    private String keyId;
 
     public static PaymentResponse from(Payment p) {
         return PaymentResponse.builder()

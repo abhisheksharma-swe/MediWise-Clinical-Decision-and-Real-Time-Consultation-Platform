@@ -48,7 +48,7 @@ fun SignupScreen(
     var dob by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
     val launchGoogleSignIn = rememberGoogleSignInLauncher(
-        onToken = viewModel::login,
+        onToken = viewModel::loginWithGoogleToken,
         onError = { message -> viewModel.showError(message) }
     )
 
@@ -244,8 +244,7 @@ fun SignupScreen(
 
             // Social Row
             MediWiseSocialRow(
-                onGoogleClick = launchGoogleSignIn,
-                onFacebookClick = { viewModel.login("mock_facebook_token") }
+                onGoogleClick = launchGoogleSignIn
             )
 
             Spacer(modifier = Modifier.height(24.dp))

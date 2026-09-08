@@ -21,15 +21,24 @@ services:
       APPLICATION_JWT_REFRESH_EXPIRATION: ${APPLICATION_JWT_REFRESH_EXPIRATION:-604800000}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_KEY:-}
-      AWS_S3_BUCKET: ${S3_BUCKET:-clinical-dev-bucket}
+      # NOTE: these names must match the ${...} placeholders application.yml actually reads
+      # (application.aws.*) — AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_S3_BUCKET look like
+      # standard AWS SDK env var names but Spring never looked for those exact names here.
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY:-}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY:-}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      S3_BUCKET: ${S3_BUCKET:-clinical-dev-bucket}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BASE_URL: ${S3_BASE_URL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -87,10 +96,34 @@ services:
     networks:
       - clinical-net
 
+  # Local S3-compatible object store for dev — the app auto-creates its bucket on
+  # startup (see AwsConfig.ensureBucketExists) once S3_ENDPOINT points here. Swap in
+  # real AWS credentials/S3_ENDPOINT="" to use actual AWS S3 instead (e.g. in prod).
+  minio:
+    image: minio/minio:latest
+    container_name: clinical-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_KEY:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clinical-net
+
 volumes:
   postgres_data:
   mongo_data:
   redis_data:
+  minio_data:
 
 networks:
   clinical-net:

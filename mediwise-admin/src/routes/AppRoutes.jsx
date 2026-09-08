@@ -9,6 +9,10 @@ import Patients from '../pages/Patients'
 import Appointments from '../pages/Appointments'
 import AssignDoctor from '../pages/AssignDoctor'
 import AuditLogs from '../pages/AuditLogs'
+import AnalyticsDetail from '../pages/AnalyticsDetail'
+import Notifications from '../pages/Notifications'
+import Profile from '../pages/Profile'
+import Chat from '../pages/Chat'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 
 function ProtectedRoute({ children }) {
@@ -38,6 +42,10 @@ export default function AppRoutes() {
         <Route path="appointments" element={<Appointments />} />
         <Route path="assign-doctor" element={<AssignDoctor />} />
         <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="analytics" element={<AnalyticsDetail />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="chat/:roomId" element={<Chat />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
