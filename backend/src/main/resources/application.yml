@@ -65,8 +65,8 @@ application:
   jwt:
     secret: ${JWT_SECRET:}
     secret-name: ${JWT_SECRET_NAME:mediwise/prod/jwt}
-    expiration: 900000          # 15 minutes
-    refresh-expiration: 604800000  # 7 days
+    expiration: ${APPLICATION_JWT_EXPIRATION:900000}          # 15 minutes
+    refresh-expiration: ${APPLICATION_JWT_REFRESH_EXPIRATION:604800000}  # 7 days
 
   firebase:
     config-path: ${FIREBASE_CONFIG_PATH:classpath:firebase-service-account.json}
@@ -86,6 +86,9 @@ application:
       endpoint: ${S3_ENDPOINT:}
       bucket: ${S3_BUCKET:clinical-system-files}
       base-url: ${S3_BASE_URL:https://clinical-system-files.s3.ap-south-1.amazonaws.com}
+
+  s3:
+    presigned-url-ttl-minutes: ${S3_PRESIGNED_URL_TTL_MINUTES:15}
 
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:8080}

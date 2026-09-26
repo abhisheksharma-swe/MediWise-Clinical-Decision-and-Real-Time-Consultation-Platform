@@ -1,20 +1,17 @@
 package com.mediwise.profile.service;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.BusinessException;
+import com.mediwise.common.storage.S3StorageService;
 import com.mediwise.profile.dto.UpdateProfileRequest;
 import com.mediwise.profile.model.PatientProfile;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.UUID;
 
 @Slf4j
@@ -23,13 +20,7 @@ import java.util.UUID;
 public class ProfileService {
 
     private final PatientProfileRepository profileRepository;
-    private final AmazonS3 amazonS3;
-
-    @Value("${application.aws.s3.bucket}")
-    private String bucket;
-
-    @Value("${application.aws.s3.base-url}")
-    private String s3BaseUrl;
+    private final S3StorageService s3StorageService;
 
     public PatientProfile getOrCreateProfile(User user) {
         PatientProfile profile = profileRepository.findByUserId(user.getId())
@@ -77,17 +68,8 @@ public class ProfileService {
         };
 
         String key = "profiles/" + user.getId() + "/" + UUID.randomUUID() + extension;
+        String url = s3StorageService.uploadPublic(key, file);
 
-        try {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(contentType);
-            metadata.setContentLength(file.getSize());
-            amazonS3.putObject(bucket, key, file.getInputStream(), metadata);
-        } catch (IOException e) {
-            throw new BusinessException("UPLOAD_FAILED", "Failed to upload image: " + e.getMessage());
-        }
-
-        String url = s3BaseUrl + "/" + key;
         PatientProfile profile = getOrCreateProfile(user);
         profile.setProfileImage(url);
         profileRepository.save(profile);

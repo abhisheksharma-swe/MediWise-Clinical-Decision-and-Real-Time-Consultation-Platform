@@ -63,7 +63,10 @@ data class DoctorDto(
     val avgRating: Double? = null,
     val totalReviews: Int = 0,
     val available: Boolean = true,
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    val clinicName: String? = null,
+    val clinicAddress: String? = null,
+    val consultationModes: List<String> = emptyList()
 )
 
 @Serializable
@@ -82,6 +85,119 @@ data class AppointmentDto(
 @Serializable data class BookAppointmentRequestDto(val slotId: String, val doctorId: String, val type: String = "ONLINE", val chiefComplaint: String? = null)
 @Serializable data class CancelRequestDto(val reason: String? = null)
 @Serializable data class CompleteAppointmentRequestDto(val notes: String, val diagnosis: String? = null, val prescription: String? = null)
+@Serializable data class RescheduleAppointmentRequestDto(val newSlotId: String)
+
+@Serializable
+data class ConsultationDto(
+    val id: String, val appointmentId: String, val patientId: String, val doctorId: String,
+    val chiefComplaint: String? = null,
+    val symptoms: List<String> = emptyList(),
+    val observations: String? = null,
+    val assessment: String? = null,
+    val treatmentPlan: String? = null,
+    val doctorNotes: String? = null,
+    val status: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null
+)
+
+@Serializable
+data class UpdateConsultationRequestDto(
+    val chiefComplaint: String? = null,
+    val symptoms: List<String>? = null,
+    val observations: String? = null,
+    val assessment: String? = null,
+    val treatmentPlan: String? = null,
+    val notes: String? = null
+)
+
+@Serializable
+data class PrescriptionItemRequestDto(
+    val medicineName: String,
+    val dosage: String? = null,
+    val frequency: String? = null,
+    val duration: String? = null,
+    val instructions: String? = null,
+    val beforeAfterFood: String? = null
+)
+
+@Serializable
+data class CreatePrescriptionRequestDto(
+    val notes: String? = null,
+    val items: List<PrescriptionItemRequestDto>
+)
+
+@Serializable
+data class PrescriptionItemDto(
+    val id: String? = null,
+    val medicineName: String,
+    val dosage: String? = null,
+    val frequency: String? = null,
+    val duration: String? = null,
+    val instructions: String? = null,
+    val beforeAfterFood: String? = null,
+    val sortOrder: Int = 0
+)
+
+@Serializable
+data class PrescriptionDto(
+    val id: String, val consultationId: String, val patientId: String, val doctorId: String,
+    val notes: String? = null,
+    val items: List<PrescriptionItemDto> = emptyList(),
+    val createdAt: String? = null
+)
+@Serializable data class SubmitReviewRequestDto(val rating: Int, val reviewText: String? = null)
+
+@Serializable
+data class ConditionDto(
+    val id: String, val name: String, val diagnosedDate: String? = null,
+    val status: String? = null, val notes: String? = null, val selfReported: Boolean = false
+)
+@Serializable
+data class AllergyDto(
+    val id: String, val allergen: String, val reaction: String? = null,
+    val severity: String? = null, val notes: String? = null, val selfReported: Boolean = false
+)
+@Serializable
+data class MedicationDto(
+    val id: String, val name: String, val dosage: String? = null, val frequency: String? = null,
+    val startDate: String? = null, val endDate: String? = null, val active: Boolean = true, val selfReported: Boolean = false
+)
+@Serializable
+data class MedicalRecordDto(
+    val patientId: String,
+    val conditions: List<ConditionDto> = emptyList(),
+    val allergies: List<AllergyDto> = emptyList(),
+    val medications: List<MedicationDto> = emptyList()
+)
+@Serializable data class CreateConditionRequestDto(val name: String, val diagnosedDate: String? = null, val notes: String? = null)
+@Serializable data class CreateAllergyRequestDto(val allergen: String, val reaction: String? = null, val severity: String? = null, val notes: String? = null)
+@Serializable data class CreateMedicationRequestDto(val name: String, val dosage: String? = null, val frequency: String? = null, val startDate: String? = null, val endDate: String? = null)
+@Serializable data class UpdateConditionStatusRequestDto(val status: String)
+
+@Serializable
+data class CreateFollowUpRequestDto(val recommendedDate: String? = null, val reason: String? = null)
+
+@Serializable
+data class FollowUpDto(
+    val id: String, val consultationId: String, val patientId: String, val doctorId: String,
+    val recommendedDate: String? = null, val reason: String? = null, val status: String,
+    val linkedAppointmentId: String? = null, val createdAt: String? = null
+)
+
+@Serializable
+data class MedicalDocumentDto(
+    val id: String, val patientId: String, val documentType: String,
+    val originalFilename: String? = null, val contentType: String? = null, val sizeBytes: Long? = null,
+    val relatedAppointmentId: String? = null, val relatedConsultationId: String? = null,
+    val url: String? = null, val uploadedAt: String? = null
+)
+@Serializable
+data class ReviewDto(
+    val id: String, val appointmentId: String, val doctorId: String,
+    val patientName: String? = null, val rating: Int, val reviewText: String? = null,
+    val createdAt: String? = null
+)
 
 @Serializable
 data class SlotDto(
@@ -224,7 +340,8 @@ fun DoctorDto.toDomain() = com.mediwise.domain.model.Doctor(
     totalReviews = totalReviews,
     experienceYears = experienceYears ?: 0,
     isAvailable = available,
-    verified = verified
+    verified = verified,
+    consultationModes = consultationModes.ifEmpty { listOf("ONLINE") }
 )
 
 fun AppointmentDto.toDomain() = com.mediwise.domain.model.Appointment(
@@ -244,18 +361,6 @@ fun AppointmentDto.toDomain() = com.mediwise.domain.model.Appointment(
     doctorUserId = doctorUserId ?: ""
 )
 
-fun AppointmentDto.toConsultationRecord() = com.mediwise.domain.model.ConsultationRecord(
-    id = id,
-    patientId = patientId,
-    doctorName = doctorName ?: "Doctor",
-    doctorSpecialty = doctorSpecialty ?: "",
-    date = slotDate ?: createdAt?.take(10) ?: "",
-    chiefComplaint = chiefComplaint ?: "",
-    notes = notes ?: "",
-    diagnosis = diagnosis ?: "",
-    prescription = prescription ?: ""
-)
-
 fun SlotDto.toDomain() = com.mediwise.domain.model.SlotModel(
     id = id,
     doctorId = doctorId ?: "",
@@ -272,6 +377,73 @@ fun PaymentDto.toDomain() = com.mediwise.domain.model.Payment(
     appointmentId = appointmentId,
     amount = amount?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "0",
     status = status
+)
+fun ConsultationDto.toDomain() = com.mediwise.domain.model.Consultation(
+    id = id,
+    appointmentId = appointmentId,
+    patientId = patientId,
+    doctorId = doctorId,
+    chiefComplaint = chiefComplaint ?: "",
+    symptoms = symptoms,
+    observations = observations ?: "",
+    assessment = assessment ?: "",
+    treatmentPlan = treatmentPlan ?: "",
+    doctorNotes = doctorNotes ?: "",
+    status = status ?: "",
+    createdAt = createdAt ?: ""
+)
+fun PrescriptionItemDto.toDomain() = com.mediwise.domain.model.PrescriptionItemModel(
+    id = id ?: "",
+    medicineName = medicineName,
+    dosage = dosage ?: "",
+    frequency = frequency ?: "",
+    duration = duration ?: "",
+    instructions = instructions ?: "",
+    beforeAfterFood = beforeAfterFood ?: ""
+)
+fun PrescriptionDto.toDomain() = com.mediwise.domain.model.PrescriptionModel(
+    id = id,
+    consultationId = consultationId,
+    notes = notes ?: "",
+    items = items.map { it.toDomain() },
+    createdAt = createdAt ?: ""
+)
+fun ConditionDto.toDomain() = com.mediwise.domain.model.Condition(
+    id = id, name = name, diagnosedDate = diagnosedDate ?: "",
+    status = status ?: "ACTIVE", notes = notes ?: "", selfReported = selfReported
+)
+fun AllergyDto.toDomain() = com.mediwise.domain.model.Allergy(
+    id = id, allergen = allergen, reaction = reaction ?: "",
+    severity = severity ?: "", notes = notes ?: "", selfReported = selfReported
+)
+fun MedicationDto.toDomain() = com.mediwise.domain.model.Medication(
+    id = id, name = name, dosage = dosage ?: "", frequency = frequency ?: "",
+    startDate = startDate ?: "", endDate = endDate ?: "", active = active, selfReported = selfReported
+)
+fun MedicalRecordDto.toDomain() = com.mediwise.domain.model.MedicalRecord(
+    patientId = patientId,
+    conditions = conditions.map { it.toDomain() },
+    allergies = allergies.map { it.toDomain() },
+    medications = medications.map { it.toDomain() }
+)
+fun FollowUpDto.toDomain() = com.mediwise.domain.model.FollowUp(
+    id = id, consultationId = consultationId, patientId = patientId, doctorId = doctorId,
+    recommendedDate = recommendedDate ?: "", reason = reason ?: "", status = status,
+    linkedAppointmentId = linkedAppointmentId ?: ""
+)
+fun MedicalDocumentDto.toDomain() = com.mediwise.domain.model.MedicalDocument(
+    id = id, patientId = patientId, documentType = documentType,
+    originalFilename = originalFilename ?: "", contentType = contentType ?: "", sizeBytes = sizeBytes ?: 0,
+    url = url ?: "", uploadedAt = uploadedAt ?: ""
+)
+fun ReviewDto.toDomain() = com.mediwise.domain.model.Review(
+    id = id,
+    appointmentId = appointmentId,
+    doctorId = doctorId,
+    patientName = patientName ?: "",
+    rating = rating,
+    reviewText = reviewText ?: "",
+    createdAt = createdAt ?: ""
 )
 fun ProfileDto.toDomain() = com.mediwise.domain.model.UserProfile(fullName = fullName ?: "", dob = dob ?: "", bloodType = bloodType ?: "", gender = gender ?: "", profileImage = profileImage)
 fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = com.mediwise.domain.model.PatientProfile(

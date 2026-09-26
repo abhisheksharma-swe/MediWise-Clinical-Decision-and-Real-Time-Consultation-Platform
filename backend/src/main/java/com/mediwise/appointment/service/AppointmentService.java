@@ -4,10 +4,12 @@ import com.mediwise.appointment.dto.AppointmentResponse;
 import com.mediwise.appointment.dto.BookAppointmentRequest;
 import com.mediwise.appointment.dto.CancelRequest;
 import com.mediwise.appointment.dto.CompleteAppointmentRequest;
+import com.mediwise.appointment.dto.RescheduleAppointmentRequest;
 import com.mediwise.appointment.event.AppointmentBookedEvent;
 import com.mediwise.appointment.event.AppointmentCancelledEvent;
 import com.mediwise.appointment.event.AppointmentCompletedEvent;
 import com.mediwise.appointment.event.AppointmentNoShowEvent;
+import com.mediwise.appointment.event.AppointmentRescheduledEvent;
 import com.mediwise.appointment.event.AppointmentStartedEvent;
 import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
@@ -15,9 +17,11 @@ import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.ResourceNotFoundException;
 import com.mediwise.common.exception.SlotConflictException;
-import com.mediwise.common.exception.UnauthorizedException;
+import com.mediwise.common.security.AppointmentAuthorizationService;
 import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
+import com.mediwise.followup.model.FollowUp;
+import com.mediwise.followup.repository.FollowUpRepository;
 import com.mediwise.profile.model.PatientProfile;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import com.mediwise.schedule.model.TimeSlot;
@@ -50,6 +54,8 @@ public class AppointmentService {
     private final DoctorRepository doctorRepository;
     private final PatientProfileRepository patientProfileRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AppointmentAuthorizationService authorizationService;
+    private final FollowUpRepository followUpRepository;
 
     // ── Patient: Book appointment after slot lock + payment ───────────────────
     @Transactional
@@ -107,6 +113,10 @@ public class AppointmentService {
         appointment = appointmentRepository.save(appointment);
         log.info("Appointment {} booked by patient {}", appointment.getId(), patient.getId());
 
+        if (request.getFollowUpId() != null) {
+            linkFollowUp(request.getFollowUpId(), patient.getId(), appointment.getId());
+        }
+
         // Publish domain event → triggers async push notification to doctor
         eventPublisher.publishEvent(new AppointmentBookedEvent(this, appointment));
 
@@ -146,14 +156,14 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
 
-        assertCanAccessAppointment(appointment, user);
+        authorizationService.assertCanAccessAppointment(appointment, user);
 
         return buildAppointmentResponse(appointment);
     }
 
     /** Completed consultation records visible to the patient or an authorized doctor. */
     public Page<AppointmentResponse> getConsultationHistory(UUID patientId, User user, int page, int size) {
-        assertCanViewPatientHistory(patientId, user);
+        authorizationService.assertCanViewPatientHistory(patientId, user);
         Pageable pageable = PageRequest.of(page, Math.min(size, 50), Sort.by("createdAt").descending());
         return appointmentRepository
                 .findByPatientIdAndStatusOrderByCreatedAtDesc(patientId, Appointment.AppointmentStatus.COMPLETED, pageable)
@@ -166,22 +176,6 @@ public class AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Patient profile", user.getId().toString()));
     }
 
-    private void assertCanViewPatientHistory(UUID patientId, User user) {
-        if (user.getRole() == User.Role.ADMIN) {
-            return;
-        }
-        if (user.getRole() == User.Role.PATIENT) {
-            UUID ownPatientId = patientProfileRepository.findByUserId(user.getId())
-                    .map(PatientProfile::getId).orElse(null);
-            if (patientId.equals(ownPatientId)) return;
-        } else if (user.getRole() == User.Role.DOCTOR) {
-            UUID doctorId = doctorRepository.findByUserId(user.getId())
-                    .map(com.mediwise.doctor.model.Doctor::getId).orElse(null);
-            if (doctorId != null && appointmentRepository.existsByDoctorIdAndPatientId(doctorId, patientId)) return;
-        }
-        throw new UnauthorizedException("You do not have permission to view this patient's consultation history.");
-    }
-
     // ── Patient/Doctor: Cancel appointment ────────────────────────────────────
     @Transactional
     @CacheEvict(value = "slots", allEntries = true)
@@ -189,7 +183,7 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
 
-        assertCanAccessAppointment(appointment, user);
+        authorizationService.assertCanAccessAppointment(appointment, user);
 
         if (appointment.getStatus() == Appointment.AppointmentStatus.COMPLETED ||
                 appointment.getStatus() == Appointment.AppointmentStatus.CANCELLED) {
@@ -210,6 +204,43 @@ public class AppointmentService {
 
         log.info("Appointment {} cancelled by user {}", id, user.getId());
         eventPublisher.publishEvent(new AppointmentCancelledEvent(this, appointment, user.getId()));
+        return buildAppointmentResponse(appointment);
+    }
+
+    // ── Patient/Doctor: Reschedule to a different slot ────────────────────────
+    @Transactional
+    @CacheEvict(value = "slots", allEntries = true)
+    public AppointmentResponse rescheduleAppointment(UUID id, User user, RescheduleAppointmentRequest request) {
+        Appointment appointment = appointmentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
+
+        authorizationService.assertCanAccessAppointment(appointment, user);
+
+        if (appointment.getStatus() != Appointment.AppointmentStatus.CONFIRMED) {
+            throw new BusinessException("INVALID_STATE",
+                    "Only CONFIRMED appointments can be rescheduled. Current: " + appointment.getStatus());
+        }
+
+        // The new slot must already be locked by this user — same precondition as booking,
+        // reusing the same atomic primitive so two concurrent reschedules can't both win it.
+        int consumed = slotRepository.tryConsumeLockedSlot(request.getNewSlotId(), user.getId());
+        if (consumed == 0) {
+            throw new SlotConflictException("New slot is not reserved for you. Please re-select.");
+        }
+
+        UUID oldSlotId = appointment.getSlotId();
+        slotRepository.findById(oldSlotId).ifPresent(slot -> {
+            slot.setStatus(TimeSlot.SlotStatus.AVAILABLE);
+            slotRepository.save(slot);
+        });
+
+        appointment.setOriginalSlotId(oldSlotId);
+        appointment.setSlotId(request.getNewSlotId());
+        appointmentRepository.save(appointment);
+
+        log.info("Appointment {} rescheduled from slot {} to slot {} by user {}",
+                id, oldSlotId, request.getNewSlotId(), user.getId());
+        eventPublisher.publishEvent(new AppointmentRescheduledEvent(this, appointment, oldSlotId));
         return buildAppointmentResponse(appointment);
     }
 
@@ -256,10 +287,7 @@ public class AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
 
         // Only the assigned doctor can start this appointment
-        UUID doctorId = getDoctorIdForUser(doctorUser);
-        if (!appointment.getDoctorId().equals(doctorId)) {
-            throw new BusinessException("FORBIDDEN", "You are not the assigned doctor for this appointment.");
-        }
+        UUID doctorId = authorizationService.assertDoctorOwnsAppointment(appointment, doctorUser);
 
         // Idempotent retry: the doctor's client already got this transition
         // through (e.g. a timed-out response), so return current state rather
@@ -289,10 +317,7 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
 
-        UUID doctorId = getDoctorIdForUser(doctorUser);
-        if (!appointment.getDoctorId().equals(doctorId)) {
-            throw new BusinessException("FORBIDDEN", "You are not the assigned doctor for this appointment.");
-        }
+        UUID doctorId = authorizationService.assertDoctorOwnsAppointment(appointment, doctorUser);
 
         // Idempotent retry: return the already-saved clinical record rather
         // than erroring — and never let a resubmit silently overwrite notes
@@ -327,10 +352,7 @@ public class AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Appointment", id.toString()));
 
-        UUID doctorId = getDoctorIdForUser(doctorUser);
-        if (!appointment.getDoctorId().equals(doctorId)) {
-            throw new BusinessException("FORBIDDEN", "You are not the assigned doctor for this appointment.");
-        }
+        UUID doctorId = authorizationService.assertDoctorOwnsAppointment(appointment, doctorUser);
 
         if (appointment.getStatus() == Appointment.AppointmentStatus.NO_SHOW) {
             return buildAppointmentResponse(appointment);
@@ -370,22 +392,16 @@ public class AppointmentService {
 
     // ── Private Helpers ───────────────────────────────────────────────────────
 
-    private void assertCanAccessAppointment(Appointment appointment, User user) {
-        if (user.getRole() == User.Role.ADMIN) {
-            return;
-        }
-        if (user.getRole() == User.Role.DOCTOR) {
-            UUID doctorId = getDoctorIdForUser(user);
-            if (appointment.getDoctorId().equals(doctorId)) {
+    /** Best-effort: an invalid/foreign follow-up ID just means the booking proceeds unlinked. */
+    private void linkFollowUp(UUID followUpId, UUID patientId, UUID appointmentId) {
+        followUpRepository.findById(followUpId).ifPresent(followUp -> {
+            if (!followUp.getPatientId().equals(patientId)) {
                 return;
             }
-        } else {
-            var patientOpt = patientProfileRepository.findByUserId(user.getId());
-            if (patientOpt.isPresent() && appointment.getPatientId().equals(patientOpt.get().getId())) {
-                return;
-            }
-        }
-        throw new BusinessException("FORBIDDEN", "You do not have access to this appointment.");
+            followUp.setLinkedAppointmentId(appointmentId);
+            followUp.setStatus(FollowUp.Status.SCHEDULED);
+            followUpRepository.save(followUp);
+        });
     }
 
     /**

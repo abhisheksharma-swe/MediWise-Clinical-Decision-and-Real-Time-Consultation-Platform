@@ -41,6 +41,8 @@ fun ProfileScreen(
     onNotificationsClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onConsultationHistoryClick: () -> Unit = {},
+    onMedicalRecordClick: () -> Unit = {},
+    onMedicalDocumentsClick: () -> Unit = {},
     refreshTick: Int = 0,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -263,7 +265,7 @@ fun ProfileScreen(
             if (uiState.isDoctor) {
                 doctorProfileContent(uiState, onNotificationsClick, onSettingsClick)
             } else {
-                patientProfileContent(uiState, context, onEditClick, onNotificationsClick, onSettingsClick, onConsultationHistoryClick)
+                patientProfileContent(uiState, context, onEditClick, onNotificationsClick, onSettingsClick, onConsultationHistoryClick, onMedicalRecordClick, onMedicalDocumentsClick)
             }
 
             item {
@@ -300,7 +302,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.patientProfileContent
     onEditClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onConsultationHistoryClick: () -> Unit
+    onConsultationHistoryClick: () -> Unit,
+    onMedicalRecordClick: () -> Unit,
+    onMedicalDocumentsClick: () -> Unit
 ) {
     val profile = uiState.profile
 
@@ -378,6 +382,18 @@ private fun androidx.compose.foundation.lazy.LazyListScope.patientProfileContent
                 title = "Consultation History",
                 subtitle = "View previous doctor notes, diagnoses and prescriptions",
                 onClick = onConsultationHistoryClick
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.MedicalServices,
+                title = "Medical Record",
+                subtitle = "Conditions, allergies and medications",
+                onClick = onMedicalRecordClick
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.Description,
+                title = "Medical Documents",
+                subtitle = "Lab reports, imaging and other uploaded files",
+                onClick = onMedicalDocumentsClick
             )
         }
     }

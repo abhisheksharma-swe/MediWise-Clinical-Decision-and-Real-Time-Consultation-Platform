@@ -41,4 +41,19 @@ abstract class RepositoryModule {
 
     @Binds @Singleton
     abstract fun bindAiRepository(impl: AiRepositoryImpl): AiRepository
+
+    @Binds @Singleton
+    abstract fun bindReviewRepository(impl: ReviewRepositoryImpl): ReviewRepository
+
+    @Binds @Singleton
+    abstract fun bindConsultationRepository(impl: ConsultationRepositoryImpl): ConsultationRepository
+
+    @Binds @Singleton
+    abstract fun bindMedicalRecordRepository(impl: MedicalRecordRepositoryImpl): MedicalRecordRepository
+
+    @Binds @Singleton
+    abstract fun bindMedicalDocumentRepository(impl: MedicalDocumentRepositoryImpl): MedicalDocumentRepository
+
+    @Binds @Singleton
+    abstract fun bindFollowUpRepository(impl: FollowUpRepositoryImpl): FollowUpRepository
 }

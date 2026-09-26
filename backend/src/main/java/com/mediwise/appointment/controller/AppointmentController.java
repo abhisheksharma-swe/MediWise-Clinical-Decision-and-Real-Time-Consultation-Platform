@@ -4,6 +4,7 @@ import com.mediwise.appointment.dto.AppointmentResponse;
 import com.mediwise.appointment.dto.BookAppointmentRequest;
 import com.mediwise.appointment.dto.CancelRequest;
 import com.mediwise.appointment.dto.CompleteAppointmentRequest;
+import com.mediwise.appointment.dto.RescheduleAppointmentRequest;
 import com.mediwise.appointment.service.AppointmentService;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.response.ApiResponse;
@@ -86,6 +87,16 @@ public class AppointmentController {
             @RequestBody CancelRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 appointmentService.cancelAppointment(id, user, request)));
+    }
+
+    @PatchMapping("/{id}/reschedule")
+    @Operation(summary = "Reschedule an appointment to a different (already-locked) slot")
+    public ResponseEntity<ApiResponse<AppointmentResponse>> reschedule(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody RescheduleAppointmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                appointmentService.rescheduleAppointment(id, user, request)));
     }
 
     // ── Doctor-only endpoints ─────────────────────────────────────────────────

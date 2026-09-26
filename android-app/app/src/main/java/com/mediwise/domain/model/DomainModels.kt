@@ -18,7 +18,7 @@ enum class Role {
 
 data class User(val id: String, val email: String, val role: String)
 data class AuthResult(val accessToken: String, val refreshToken: String, val user: User)
-data class Doctor(val id: String, val fullName: String, val specialty: String, val consultationFee: String, val rating: Double, val reviewCount: Int, val profileImage: String?, val available: Boolean, val bio: String = "", val avgRating: Double = 0.0, val totalReviews: Int = 0, val experienceYears: Int = 0, val isAvailable: Boolean = true, val email: String = "", val verified: Boolean = false)
+data class Doctor(val id: String, val fullName: String, val specialty: String, val consultationFee: String, val rating: Double, val reviewCount: Int, val profileImage: String?, val available: Boolean, val bio: String = "", val avgRating: Double = 0.0, val totalReviews: Int = 0, val experienceYears: Int = 0, val isAvailable: Boolean = true, val email: String = "", val verified: Boolean = false, val consultationModes: List<String> = listOf("ONLINE"))
 data class Appointment(
     val id: String, val patientId: String, val doctorId: String,
     val patientName: String = "", val doctorName: String = "", val doctorSpecialty: String = "", val slotId: String,
@@ -26,18 +26,79 @@ data class Appointment(
     /** The User ids behind patientId/doctorId - needed to address WebRTC call signaling (routed by user id, not profile id). Blank if the backend didn't provide them (e.g. an older cached response). */
     val patientUserId: String = "", val doctorUserId: String = ""
 )
-data class ConsultationRecord(
-    val id: String,
-    val patientId: String,
-    val doctorName: String,
-    val doctorSpecialty: String,
-    val date: String,
-    val chiefComplaint: String,
-    val notes: String,
-    val diagnosis: String,
-    val prescription: String
-)
 data class Payment(val id: String, val appointmentId: String, val amount: String, val status: String)
+data class Consultation(
+    val id: String,
+    val appointmentId: String,
+    val patientId: String,
+    val doctorId: String,
+    val chiefComplaint: String = "",
+    val symptoms: List<String> = emptyList(),
+    val observations: String = "",
+    val assessment: String = "",
+    val treatmentPlan: String = "",
+    val doctorNotes: String = "",
+    val status: String = "",
+    val createdAt: String = ""
+)
+data class PrescriptionItemModel(
+    val id: String = "",
+    val medicineName: String,
+    val dosage: String = "",
+    val frequency: String = "",
+    val duration: String = "",
+    val instructions: String = "",
+    val beforeAfterFood: String = ""
+)
+data class PrescriptionModel(
+    val id: String,
+    val consultationId: String,
+    val notes: String = "",
+    val items: List<PrescriptionItemModel> = emptyList(),
+    val createdAt: String = ""
+)
+data class Condition(
+    val id: String, val name: String, val diagnosedDate: String = "",
+    val status: String = "ACTIVE", val notes: String = "", val selfReported: Boolean = false
+)
+data class Allergy(
+    val id: String, val allergen: String, val reaction: String = "",
+    val severity: String = "", val notes: String = "", val selfReported: Boolean = false
+)
+data class Medication(
+    val id: String, val name: String, val dosage: String = "", val frequency: String = "",
+    val startDate: String = "", val endDate: String = "", val active: Boolean = true, val selfReported: Boolean = false
+)
+data class MedicalRecord(
+    val patientId: String,
+    val conditions: List<Condition> = emptyList(),
+    val allergies: List<Allergy> = emptyList(),
+    val medications: List<Medication> = emptyList()
+)
+data class FollowUp(
+    val id: String,
+    val consultationId: String,
+    val patientId: String,
+    val doctorId: String,
+    val recommendedDate: String = "",
+    val reason: String = "",
+    val status: String = "PENDING",
+    val linkedAppointmentId: String = ""
+)
+data class MedicalDocument(
+    val id: String, val patientId: String, val documentType: String,
+    val originalFilename: String = "", val contentType: String = "", val sizeBytes: Long = 0,
+    val url: String = "", val uploadedAt: String = ""
+)
+data class Review(
+    val id: String,
+    val appointmentId: String,
+    val doctorId: String,
+    val patientName: String,
+    val rating: Int,
+    val reviewText: String,
+    val createdAt: String
+)
 
 data class PaymentOrder(
     val paymentId: String,

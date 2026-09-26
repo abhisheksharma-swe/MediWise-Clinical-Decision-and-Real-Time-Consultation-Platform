@@ -34,10 +34,14 @@ fun ScheduleScreen(
     doctorId: String,
     onBackClick: () -> Unit,
     onAppointmentBooked: (appointmentId: String) -> Unit,
+    rescheduleAppointmentId: String? = null,
+    onAppointmentRescheduled: () -> Unit = {},
     viewModel: ScheduleViewModel = hiltViewModel()
 ) {
+    val isRescheduleMode = !rescheduleAppointmentId.isNullOrBlank()
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedType by remember { mutableStateOf("ONLINE") }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(selectedDate, doctorId) {
@@ -55,8 +59,10 @@ fun ScheduleScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Book Appointment", fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp, color = TextPrimary)
+                        Text(
+                            if (isRescheduleMode) "Reschedule Appointment" else "Book Appointment",
+                            fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary
+                        )
                         Text(
                             uiState.doctorName.ifBlank { null }?.let { "Dr. $it" } ?: "Loading...",
                             fontSize = 12.sp,
@@ -87,8 +93,14 @@ fun ScheduleScreen(
                         Button(
                             onClick = {
                                 selectedSlotModel?.let { slot ->
-                                    viewModel.lockAndBookSlot(slot.id, doctorId) { appointmentId ->
-                                        onAppointmentBooked(appointmentId)
+                                    if (isRescheduleMode) {
+                                        viewModel.lockAndRescheduleSlot(slot.id, rescheduleAppointmentId!!) {
+                                            onAppointmentRescheduled()
+                                        }
+                                    } else {
+                                        viewModel.lockAndBookSlot(slot.id, doctorId, selectedType) { appointmentId ->
+                                            onAppointmentBooked(appointmentId)
+                                        }
                                     }
                                 }
                             },
@@ -106,7 +118,8 @@ fun ScheduleScreen(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "Confirm: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))} at ${selectedSlotModel?.startTime}",
+                                    "${if (isRescheduleMode) "Confirm new time" else "Confirm"}: " +
+                                        "${selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))} at ${selectedSlotModel?.startTime}",
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -122,6 +135,24 @@ fun ScheduleScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (!isRescheduleMode && uiState.consultationModes.size > 1) {
+                val availableModes = listOf("ONLINE" to "Online", "IN_PERSON" to "In-Person")
+                    .filter { (mode, _) -> uiState.consultationModes.contains(mode) }
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    availableModes.forEachIndexed { index, (mode, label) ->
+                        SegmentedButton(
+                            selected = selectedType == mode,
+                            onClick = { selectedType = mode },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = availableModes.size)
+                        ) {
+                            Text(label, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
             // Month navigation
             Card(
                 modifier = Modifier

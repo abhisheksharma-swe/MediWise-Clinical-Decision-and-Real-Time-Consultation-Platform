@@ -26,6 +26,9 @@ public class DoctorResponse {
     private Integer totalReviews;
     private boolean available;
     private boolean verified;
+    private String clinicName;
+    private String clinicAddress;
+    private Set<String> consultationModes;
 
     public static DoctorResponse from(Doctor d) {
         return DoctorResponse.builder()
@@ -45,6 +48,9 @@ public class DoctorResponse {
                 .totalReviews(d.getTotalReviews())
                 .available(d.isAvailable())
                 .verified(d.isVerified())
+                .clinicName(d.getClinicName())
+                .clinicAddress(d.getClinicAddress())
+                .consultationModes(d.getConsultationModes() == null ? null : new HashSet<>(d.getConsultationModes()))
                 .build();
     }
 }

@@ -7,6 +7,8 @@ import com.mediwise.admin.dto.UserSummaryResponse;
 import com.mediwise.admin.service.AdminService;
 import com.mediwise.appointment.dto.AppointmentResponse;
 import com.mediwise.auth.model.User;
+import com.mediwise.common.audit.AuditLogResponse;
+import com.mediwise.common.audit.AuditLogService;
 import com.mediwise.common.response.ApiResponse;
 import com.mediwise.common.response.PagedResponse;
 import com.mediwise.doctor.dto.DoctorResponse;
@@ -14,10 +16,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +32,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AuditLogService auditLogService;
 
     @GetMapping("/stats")
     @Operation(summary = "Platform-wide analytics & metrics for admin dashboard")
@@ -107,5 +112,18 @@ public class AdminController {
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.success(
                 PagedResponse.of(adminService.getAllAppointments(status, page, size))));
+    }
+
+    @GetMapping("/audit-logs")
+    @Operation(summary = "Paginated, filterable audit log (actor/date-range/outcome)")
+    public ResponseEntity<ApiResponse<PagedResponse<AuditLogResponse>>> getAuditLogs(
+            @RequestParam(required = false) String actorId,
+            @RequestParam(required = false) String outcome,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant end,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(
+                PagedResponse.of(auditLogService.search(actorId, outcome, start, end, page, size))));
     }
 }

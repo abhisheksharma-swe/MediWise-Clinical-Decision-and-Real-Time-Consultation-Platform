@@ -55,8 +55,11 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String) = "doctors/$id"
     }
     object Favorites : Screen("favorites")
-    object Schedule : Screen("schedule/{doctorId}") {
-        fun createRoute(id: String) = "schedule/$id"
+    object Schedule : Screen("schedule/{doctorId}?rescheduleAppointmentId={rescheduleAppointmentId}") {
+        fun createRoute(id: String, rescheduleAppointmentId: String? = null): String {
+            val base = "schedule/$id"
+            return if (rescheduleAppointmentId != null) "$base?rescheduleAppointmentId=$rescheduleAppointmentId" else base
+        }
     }
     object Appointments : Screen("appointments")
     object AppointmentDetail : Screen("appointments/{appointmentId}") {
@@ -92,6 +95,18 @@ sealed class Screen(val route: String) {
     object EditProfile : Screen("edit_profile")
     object Settings : Screen("settings")
     object DoctorSchedule : Screen("doctor_schedule")
+    object Review : Screen("review/{appointmentId}") {
+        fun createRoute(appointmentId: String) = "review/$appointmentId"
+    }
+    object ConsultationDetail : Screen("consultation/{appointmentId}") {
+        fun createRoute(appointmentId: String) = "consultation/$appointmentId"
+    }
+    object MedicalRecord : Screen("medical_record?patientId={patientId}") {
+        fun createRoute(patientId: String? = null) = if (patientId != null) "medical_record?patientId=$patientId" else "medical_record"
+    }
+    object MedicalDocuments : Screen("medical_documents?patientId={patientId}") {
+        fun createRoute(patientId: String? = null) = if (patientId != null) "medical_documents?patientId=$patientId" else "medical_documents"
+    }
 }
 
 /**
@@ -289,16 +304,25 @@ fun NavGraph(
                 )
             }
 
-            composable(Screen.Schedule.route, arguments = listOf(navArgument("doctorId") { type = NavType.StringType })) { backStackEntry ->
+            composable(
+                Screen.Schedule.route,
+                arguments = listOf(
+                    navArgument("doctorId") { type = NavType.StringType },
+                    navArgument("rescheduleAppointmentId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                )
+            ) { backStackEntry ->
                 val doctorId = backStackEntry.arguments?.getString("doctorId") ?: ""
+                val rescheduleAppointmentId = backStackEntry.arguments?.getString("rescheduleAppointmentId")
                 ScheduleScreen(
                     doctorId = doctorId,
                     onBackClick = { navController.navigateUp() },
+                    rescheduleAppointmentId = rescheduleAppointmentId,
                     onAppointmentBooked = { appointmentId ->
                         navController.navigate(Screen.Payment.createRoute(appointmentId)) {
                             popUpTo(Screen.Schedule.route) { inclusive = true }
                         }
-                    }
+                    },
+                    onAppointmentRescheduled = { navController.navigateUp() }
                 )
             }
 
@@ -328,6 +352,9 @@ fun NavGraph(
                 AppointmentListScreen(
                     onAppointmentClick = { id -> navController.navigate(Screen.AppointmentDetail.createRoute(id)) },
                     onJoinClick = { id -> navController.navigate(Screen.Chat.createRoute("appointment_$id")) },
+                    onRescheduleClick = { appointmentId, doctorId ->
+                        navController.navigate(Screen.Schedule.createRoute(doctorId, appointmentId))
+                    },
                     refreshTick = appointmentsRefreshTick
                 )
             }
@@ -340,7 +367,13 @@ fun NavGraph(
                     onJoinClick = { navController.navigate(Screen.Chat.createRoute("appointment_$appointmentId")) },
                     onAiReportClick = { patientId -> navController.navigate(Screen.AiPatientReport.createRoute(patientId)) },
                     onPatientHistoryClick = { patientId -> navController.navigate(Screen.PatientConsultationHistory.createRoute(patientId)) },
-                    onReviewClick = { id -> },
+                    onMedicalRecordClick = { patientId -> navController.navigate(Screen.MedicalRecord.createRoute(patientId)) },
+                    onReviewClick = { id -> navController.navigate(Screen.Review.createRoute(id)) },
+                    onRescheduleClick = { id, doctorId ->
+                        navController.navigate(Screen.Schedule.createRoute(doctorId, id))
+                    },
+                    onConsultationClick = { id -> navController.navigate(Screen.ConsultationDetail.createRoute(id)) },
+                    isDoctor = role == com.mediwise.domain.model.Role.DOCTOR,
                     onAudioCallClick = { otherPartyId ->
                         navController.navigate(
                             Screen.Call.createRoute(
@@ -363,6 +396,45 @@ fun NavGraph(
                             )
                         )
                     }
+                )
+            }
+
+            composable(Screen.Review.route, arguments = listOf(navArgument("appointmentId") { type = NavType.StringType })) { backStackEntry ->
+                val appointmentId = backStackEntry.arguments?.getString("appointmentId") ?: ""
+                AppointmentReviewScreen(
+                    appointmentId = appointmentId,
+                    onBackClick = { navController.navigateUp() },
+                    onSubmitClick = { navController.navigateUp() }
+                )
+            }
+
+            composable(Screen.ConsultationDetail.route, arguments = listOf(navArgument("appointmentId") { type = NavType.StringType })) { backStackEntry ->
+                val appointmentId = backStackEntry.arguments?.getString("appointmentId") ?: ""
+                com.mediwise.presentation.screens.consultation.ConsultationDetailScreen(
+                    appointmentId = appointmentId,
+                    onBackClick = { navController.navigateUp() }
+                )
+            }
+
+            composable(
+                Screen.MedicalRecord.route,
+                arguments = listOf(navArgument("patientId") { type = NavType.StringType; nullable = true; defaultValue = null })
+            ) { backStackEntry ->
+                val patientId = backStackEntry.arguments?.getString("patientId")
+                com.mediwise.presentation.screens.medicalrecord.MedicalRecordScreen(
+                    patientId = patientId,
+                    onBackClick = { navController.navigateUp() }
+                )
+            }
+
+            composable(
+                Screen.MedicalDocuments.route,
+                arguments = listOf(navArgument("patientId") { type = NavType.StringType; nullable = true; defaultValue = null })
+            ) { backStackEntry ->
+                val patientId = backStackEntry.arguments?.getString("patientId")
+                com.mediwise.presentation.screens.medicalrecord.MedicalDocumentsScreen(
+                    patientId = patientId,
+                    onBackClick = { navController.navigateUp() }
                 )
             }
 
@@ -438,6 +510,8 @@ fun NavGraph(
                     onSettingsClick = { navController.navigate(Screen.Settings.route) },
                     onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
                     onConsultationHistoryClick = { navController.navigate(Screen.ConsultationHistory.route) },
+                    onMedicalRecordClick = { navController.navigate(Screen.MedicalRecord.createRoute()) },
+                    onMedicalDocumentsClick = { navController.navigate(Screen.MedicalDocuments.createRoute()) },
                     onLogoutClick = {
                         navController.navigate(Screen.Login.route) {
                             popUpTo(0) { inclusive = true }

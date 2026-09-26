@@ -6,6 +6,7 @@ import com.mediwise.core.result.Result
 import com.mediwise.domain.model.SlotModel
 import com.mediwise.domain.repository.DoctorRepository
 import com.mediwise.domain.usecase.appointment.BookAppointmentUseCase
+import com.mediwise.domain.usecase.appointment.RescheduleAppointmentUseCase
 import com.mediwise.domain.usecase.schedule.GetSlotsUseCase
 import com.mediwise.domain.usecase.schedule.LockSlotUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +26,7 @@ data class ScheduleUiState(
     val isBooking: Boolean = false,
     val lockedSlotId: String? = null,
     val doctorName: String = "",
+    val consultationModes: List<String> = listOf("ONLINE"),
     val error: String? = null
 )
 
@@ -33,6 +35,7 @@ class ScheduleViewModel @Inject constructor(
     private val getSlotsUseCase: GetSlotsUseCase,
     private val lockSlotUseCase: LockSlotUseCase,
     private val bookAppointmentUseCase: BookAppointmentUseCase,
+    private val rescheduleAppointmentUseCase: RescheduleAppointmentUseCase,
     private val doctorRepository: DoctorRepository
 ) : ViewModel() {
 
@@ -42,7 +45,9 @@ class ScheduleViewModel @Inject constructor(
     fun loadDoctorName(doctorId: String) {
         viewModelScope.launch {
             when (val result = doctorRepository.getDoctorById(doctorId)) {
-                is Result.Success -> _uiState.update { it.copy(doctorName = result.data.fullName) }
+                is Result.Success -> _uiState.update {
+                    it.copy(doctorName = result.data.fullName, consultationModes = result.data.consultationModes)
+                }
                 else -> {}
             }
         }
@@ -70,19 +75,48 @@ class ScheduleViewModel @Inject constructor(
      * only invoked once a real appointment exists server-side — the caller
      * navigates to Payment with a genuine appointmentId, never a fabricated one.
      */
-    fun lockAndBookSlot(slotId: String, doctorId: String, onBooked: (appointmentId: String) -> Unit) {
+    fun lockAndBookSlot(slotId: String, doctorId: String, type: String, onBooked: (appointmentId: String) -> Unit) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLocking = true, error = null) }
             when (val lockResult = lockSlotUseCase(slotId)) {
                 is Result.Success -> {
                     _uiState.update { it.copy(isLocking = false, lockedSlotId = slotId, isBooking = true) }
-                    when (val bookResult = bookAppointmentUseCase(doctorId = doctorId, slotId = slotId, type = "ONLINE")) {
+                    when (val bookResult = bookAppointmentUseCase(doctorId = doctorId, slotId = slotId, type = type)) {
                         is Result.Success -> {
                             _uiState.update { it.copy(isBooking = false) }
                             onBooked(bookResult.data.id)
                         }
                         is Result.Error -> {
                             _uiState.update { it.copy(isBooking = false, error = bookResult.exception.message) }
+                        }
+                        is Result.Loading -> {}
+                    }
+                }
+                is Result.Error -> {
+                    _uiState.update { it.copy(isLocking = false, error = lockResult.exception.message) }
+                }
+                is Result.Loading -> {}
+            }
+        }
+    }
+
+    /**
+     * Reschedule mode: locks the newly picked slot, then moves the existing appointment
+     * onto it (instead of creating a new appointment via [lockAndBookSlot]).
+     */
+    fun lockAndRescheduleSlot(slotId: String, appointmentId: String, onRescheduled: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLocking = true, error = null) }
+            when (val lockResult = lockSlotUseCase(slotId)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isLocking = false, lockedSlotId = slotId, isBooking = true) }
+                    when (val result = rescheduleAppointmentUseCase(appointmentId, slotId)) {
+                        is Result.Success -> {
+                            _uiState.update { it.copy(isBooking = false) }
+                            onRescheduled()
+                        }
+                        is Result.Error -> {
+                            _uiState.update { it.copy(isBooking = false, error = result.exception.message) }
                         }
                         is Result.Loading -> {}
                     }

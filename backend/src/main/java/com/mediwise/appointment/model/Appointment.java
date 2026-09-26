@@ -57,6 +57,12 @@ public class Appointment {
     @Column(name = "cancel_reason", columnDefinition = "TEXT")
     private String cancelReason;
 
+    @Column(name = "original_slot_id")
+    private UUID originalSlotId;
+
+    @Column(name = "rescheduled_from_appointment_id")
+    private UUID rescheduledFromAppointmentId;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
@@ -66,7 +72,7 @@ public class Appointment {
     private Instant updatedAt;
 
     public enum AppointmentStatus {
-        PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW
+        PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW, RESCHEDULED
     }
 
     public enum AppointmentType {

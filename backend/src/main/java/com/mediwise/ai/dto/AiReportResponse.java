@@ -23,6 +23,8 @@ public class AiReportResponse {
 
     private String suggestedSpecialty;
 
+    private String careCategory;
+
     private double confidence;
 
     private String recommendation;

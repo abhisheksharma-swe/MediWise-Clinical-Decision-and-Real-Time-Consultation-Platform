@@ -26,7 +26,11 @@ fun AppointmentDetailScreen(
     onJoinClick: () -> Unit,
     onAiReportClick: (String) -> Unit,
     onPatientHistoryClick: (String) -> Unit = {},
+    onMedicalRecordClick: (String) -> Unit = {},
     onReviewClick: (String) -> Unit,
+    onRescheduleClick: (appointmentId: String, doctorId: String) -> Unit = { _, _ -> },
+    onConsultationClick: (appointmentId: String) -> Unit = {},
+    isDoctor: Boolean = false,
     onAudioCallClick: (otherPartyUserId: String) -> Unit = {},
     onVideoCallClick: (otherPartyUserId: String) -> Unit = {},
     viewModel: AppointmentDetailViewModel = hiltViewModel()
@@ -73,6 +77,7 @@ fun AppointmentDetailScreen(
             uiState.appointment != null -> {
                 val appt = uiState.appointment!!
                 val canCancel = appt.status == "CONFIRMED" || appt.status == "PENDING"
+                val canReschedule = appt.status == "CONFIRMED"
                 val canJoin = appt.status == "CONFIRMED" || appt.status == "IN_PROGRESS"
                 val canReview = appt.status == "COMPLETED"
 
@@ -133,6 +138,21 @@ fun AppointmentDetailScreen(
                         }
                     }
 
+                    if (isDoctor && appt.status == "IN_PROGRESS") {
+                        item {
+                            Button(
+                                onClick = { onConsultationClick(appointmentId) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                            ) {
+                                Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Consultation Notes & Prescription")
+                            }
+                        }
+                    }
+
                     if (canJoin) {
                         item {
                             OutlinedButton(
@@ -143,6 +163,17 @@ fun AppointmentDetailScreen(
                                 Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("View patient consultation history")
+                            }
+                        }
+                        item {
+                            OutlinedButton(
+                                onClick = { onMedicalRecordClick(appt.patientId) },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.MedicalServices, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("View medical record")
                             }
                         }
                     }
@@ -202,7 +233,7 @@ fun AppointmentDetailScreen(
                         }
                     }
 
-                    if (canCancel || canReview) {
+                    if (canCancel || canReview || canReschedule) {
                         item {
                             if (uiState.error != null) {
                                 Text(uiState.error ?: "", color = ErrorRed, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
@@ -217,6 +248,17 @@ fun AppointmentDetailScreen(
                                         Icon(Icons.Default.StarBorder, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(6.dp))
                                         Text("Review", fontSize = 13.sp)
+                                    }
+                                }
+                                if (canReschedule) {
+                                    OutlinedButton(
+                                        onClick = { onRescheduleClick(appointmentId, appt.doctorId) },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Reschedule", fontSize = 13.sp)
                                     }
                                 }
                                 if (canCancel) {

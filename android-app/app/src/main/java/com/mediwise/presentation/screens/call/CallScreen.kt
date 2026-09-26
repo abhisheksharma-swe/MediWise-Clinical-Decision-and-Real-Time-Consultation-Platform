@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +28,7 @@ import com.mediwise.domain.model.CallDirection
 import com.mediwise.domain.model.CallMediaType
 import com.mediwise.domain.model.CallState
 import com.mediwise.presentation.theme.*
+import org.webrtc.SurfaceViewRenderer
 
 @Composable
 fun CallScreen(
@@ -52,6 +55,17 @@ fun CallScreen(
         if (!granted) micPermanentlyDenied = true
     }
 
+    // Only relevant for video calls - an audio call never touches the camera.
+    var cameraGranted by remember {
+        mutableStateOf(
+            mediaType != CallMediaType.VIDEO ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> cameraGranted = granted }
+
     // Set up once per screen instance - both branches are idempotent against a re-trigger
     // (initRoom-style dedupe lives in CallViewModel), so recomposition is safe.
     LaunchedEffect(roomId, direction) {
@@ -66,28 +80,40 @@ fun CallScreen(
         }
     }
 
-    // Outgoing calls (and an incoming call once accepted) need the mic before WebRTC can
-    // start - request it here rather than at CallViewModel, which has no Activity context.
+    // Outgoing calls (and an incoming call once accepted) need the mic - and, for video calls,
+    // the camera - before WebRTC can start. Requested here rather than at CallViewModel, which
+    // has no Activity context.
     LaunchedEffect(direction, uiState.hasAccepted) {
-        val needsMic = direction == CallDirection.OUTGOING || uiState.hasAccepted
-        if (needsMic && !micGranted) {
+        val needsPermissions = direction == CallDirection.OUTGOING || uiState.hasAccepted
+        if (needsPermissions && !micGranted) {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        if (needsPermissions && mediaType == CallMediaType.VIDEO && !cameraGranted) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
-    LaunchedEffect(micGranted, direction) {
-        if (micGranted && direction == CallDirection.OUTGOING && uiState.state == CallState.IDLE) {
+    LaunchedEffect(micGranted, cameraGranted, direction) {
+        val readyToStart = micGranted && (mediaType != CallMediaType.VIDEO || cameraGranted)
+        if (readyToStart && direction == CallDirection.OUTGOING && uiState.state == CallState.IDLE) {
             viewModel.startOutgoingCall(roomId, otherPartyId, mediaType)
         }
     }
 
+    val needsCameraToo = mediaType == CallMediaType.VIDEO && !cameraGranted
+    val readyToShowCall = direction == CallDirection.OUTGOING || uiState.hasAccepted
+
     Scaffold(containerColor = Color(0xFF111827)) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                !micGranted && (direction == CallDirection.OUTGOING || uiState.hasAccepted) -> {
+                (!micGranted || needsCameraToo) && readyToShowCall -> {
                     MicPermissionGate(
+                        needsCamera = needsCameraToo,
                         permanentlyDenied = micPermanentlyDenied,
-                        onRequest = { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                        onRequest = {
+                            if (!micGranted) micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            if (needsCameraToo) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        },
                         onCancel = onCallEnded
                     )
                 }
@@ -109,10 +135,17 @@ fun CallScreen(
                         otherPartyName = otherPartyName,
                         state = uiState.state,
                         isMuted = uiState.isMuted,
+                        mediaType = mediaType,
+                        isFrontCamera = uiState.isFrontCamera,
                         elapsedSeconds = uiState.elapsedSeconds,
                         error = uiState.error,
                         onToggleMute = { viewModel.toggleMute() },
-                        onEndCall = { viewModel.endCall() }
+                        onEndCall = { viewModel.endCall() },
+                        onSwitchCamera = { viewModel.switchCamera() },
+                        onAttachLocalRenderer = { viewModel.attachLocalRenderer(it) },
+                        onDetachLocalRenderer = { viewModel.detachLocalRenderer(it) },
+                        onAttachRemoteRenderer = { viewModel.attachRemoteRenderer(it) },
+                        onDetachRemoteRenderer = { viewModel.detachRemoteRenderer(it) }
                     )
                 }
             }
@@ -121,7 +154,7 @@ fun CallScreen(
 }
 
 @Composable
-private fun MicPermissionGate(permanentlyDenied: Boolean, onRequest: () -> Unit, onCancel: () -> Unit) {
+private fun MicPermissionGate(needsCamera: Boolean, permanentlyDenied: Boolean, onRequest: () -> Unit, onCancel: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -129,11 +162,16 @@ private fun MicPermissionGate(permanentlyDenied: Boolean, onRequest: () -> Unit,
     ) {
         Icon(Icons.Default.MicOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(16.dp))
-        Text("Microphone access needed", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Text(
+            if (needsCamera) "Microphone & camera access needed" else "Microphone access needed",
+            color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             if (permanentlyDenied)
-                "Microphone permission was denied. Enable it from system Settings to make calls."
+                "Permission was denied. Enable it from system Settings to make calls."
+            else if (needsCamera)
+                "MediWise needs microphone and camera access to place or receive video calls."
             else
                 "MediWise needs microphone access to place or receive calls.",
             color = Color.White.copy(alpha = 0.7f),
@@ -192,52 +230,135 @@ private fun InCallContent(
     otherPartyName: String,
     state: CallState,
     isMuted: Boolean,
+    mediaType: CallMediaType,
+    isFrontCamera: Boolean,
     elapsedSeconds: Int,
     error: String?,
     onToggleMute: () -> Unit,
-    onEndCall: () -> Unit
+    onEndCall: () -> Unit,
+    onSwitchCamera: () -> Unit,
+    onAttachLocalRenderer: (SurfaceViewRenderer) -> Unit,
+    onDetachLocalRenderer: (SurfaceViewRenderer) -> Unit,
+    onAttachRemoteRenderer: (SurfaceViewRenderer) -> Unit,
+    onDetachRemoteRenderer: (SurfaceViewRenderer) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            CallerAvatar(otherPartyName)
-            Spacer(Modifier.height(20.dp))
-            Text(otherPartyName.ifBlank { "Unknown" }, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = when (state) {
-                    CallState.RINGING -> "Calling..."
-                    CallState.CONNECTING -> "Connecting..."
-                    CallState.CONNECTED -> formatElapsed(elapsedSeconds)
-                    CallState.ENDED -> error ?: "Call ended"
-                    CallState.FAILED -> error ?: "Call failed"
-                    CallState.IDLE -> ""
-                },
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 15.sp
+    val showVideoSurfaces = mediaType == CallMediaType.VIDEO &&
+        state in setOf(CallState.CONNECTING, CallState.CONNECTED)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (showVideoSurfaces) {
+            RemoteVideoSurface(
+                modifier = Modifier.fillMaxSize(),
+                onAttach = onAttachRemoteRenderer,
+                onDetach = onDetachRemoteRenderer
             )
-            if (state == CallState.CONNECTED && error != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(error, color = WarningAmber, fontSize = 12.sp)
+        }
+
+        Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = if (showVideoSurfaces) Arrangement.Top else Arrangement.Center
+            ) {
+                if (!showVideoSurfaces) {
+                    CallerAvatar(otherPartyName)
+                    Spacer(Modifier.height(20.dp))
+                }
+                Text(otherPartyName.ifBlank { "Unknown" }, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = when (state) {
+                        CallState.RINGING -> "Calling..."
+                        CallState.CONNECTING -> "Connecting..."
+                        CallState.CONNECTED -> formatElapsed(elapsedSeconds)
+                        CallState.ENDED -> error ?: "Call ended"
+                        CallState.FAILED -> error ?: "Call failed"
+                        CallState.IDLE -> ""
+                    },
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 15.sp
+                )
+                if (state == CallState.CONNECTED && error != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(error, color = WarningAmber, fontSize = 12.sp)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                CallActionButton(
+                    icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                    label = if (isMuted) "Unmute" else "Mute",
+                    background = Color.White.copy(alpha = 0.15f),
+                    onClick = onToggleMute
+                )
+                if (showVideoSurfaces) {
+                    CallActionButton(
+                        icon = Icons.Default.Cameraswitch,
+                        label = "Flip",
+                        background = Color.White.copy(alpha = 0.15f),
+                        onClick = onSwitchCamera
+                    )
+                }
+                CallActionButton(icon = Icons.Default.CallEnd, label = "End", background = ErrorRed, onClick = onEndCall)
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            CallActionButton(
-                icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                label = if (isMuted) "Unmute" else "Mute",
-                background = Color.White.copy(alpha = 0.15f),
-                onClick = onToggleMute
+        if (showVideoSurfaces) {
+            LocalVideoSurface(
+                isFrontCamera = isFrontCamera,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp)
+                    .size(width = 100.dp, height = 140.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+                onAttach = onAttachLocalRenderer,
+                onDetach = onDetachLocalRenderer
             )
-            CallActionButton(icon = Icons.Default.CallEnd, label = "End", background = ErrorRed, onClick = onEndCall)
         }
     }
+}
+
+@Composable
+private fun RemoteVideoSurface(
+    modifier: Modifier = Modifier,
+    onAttach: (SurfaceViewRenderer) -> Unit,
+    onDetach: (SurfaceViewRenderer) -> Unit
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            SurfaceViewRenderer(ctx).apply {
+                setEnableHardwareScaler(true)
+                onAttach(this)
+            }
+        },
+        onRelease = { onDetach(it) }
+    )
+}
+
+@Composable
+private fun LocalVideoSurface(
+    isFrontCamera: Boolean,
+    modifier: Modifier = Modifier,
+    onAttach: (SurfaceViewRenderer) -> Unit,
+    onDetach: (SurfaceViewRenderer) -> Unit
+) {
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            SurfaceViewRenderer(ctx).apply {
+                setEnableHardwareScaler(true)
+                setZOrderMediaOverlay(true)
+                setMirror(isFrontCamera)
+                onAttach(this)
+            }
+        },
+        update = { it.setMirror(isFrontCamera) },
+        onRelease = { onDetach(it) }
+    )
 }
 
 @Composable

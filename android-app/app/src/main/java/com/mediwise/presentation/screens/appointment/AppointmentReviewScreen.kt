@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mediwise.presentation.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -18,11 +20,20 @@ import com.mediwise.presentation.theme.*
 fun AppointmentReviewScreen(
     appointmentId: String,
     onBackClick: () -> Unit,
-    onSubmitClick: () -> Unit
+    onSubmitClick: () -> Unit,
+    viewModel: ReviewViewModel = hiltViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var rating by remember { mutableIntStateOf(0) }
     var reviewText by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(appointmentId) {
+        viewModel.load(appointmentId)
+    }
+
+    LaunchedEffect(uiState.submitted) {
+        if (uiState.submitted) onSubmitClick()
+    }
 
     Scaffold(
         topBar = {
@@ -63,12 +74,17 @@ fun AppointmentReviewScreen(
                         modifier = Modifier.size(48.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("SJ", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                            val initials = uiState.doctorName.trim().split(" ")
+                                .mapNotNull { it.firstOrNull()?.uppercase() }.take(2).joinToString("")
+                            Text(initials.ifBlank { "?" }, color = PrimaryBlue, fontWeight = FontWeight.Bold)
                         }
                     }
                     Column {
-                        Text("Dr. Sarah Johnson", fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text("Cardiology • Apr 29, 2025", fontSize = 13.sp, color = TextSecondary)
+                        Text(
+                            uiState.doctorName.ifBlank { null }?.let { "Dr. $it" } ?: "Loading...",
+                            fontWeight = FontWeight.Bold, color = TextPrimary
+                        )
+                        Text("${uiState.doctorSpecialty} • ${uiState.date}", fontSize = 13.sp, color = TextSecondary)
                     }
                 }
             }
@@ -131,20 +147,20 @@ fun AppointmentReviewScreen(
                     .padding(top = 4.dp)
             )
 
+            if (uiState.error != null) {
+                Text(uiState.error ?: "", color = ErrorRed, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+
             Spacer(Modifier.weight(1f))
 
             Button(
-                onClick = {
-                    isSubmitting = true
-                    // TODO: call ReviewUseCase(appointmentId, rating, reviewText)
-                    onSubmitClick()
-                },
-                enabled = rating > 0 && !isSubmitting,
+                onClick = { viewModel.submit(appointmentId, rating, reviewText) },
+                enabled = rating > 0 && !uiState.isSubmitting,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
             ) {
-                if (isSubmitting) {
+                if (uiState.isSubmitting) {
                     CircularProgressIndicator(
                         color = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(20.dp),

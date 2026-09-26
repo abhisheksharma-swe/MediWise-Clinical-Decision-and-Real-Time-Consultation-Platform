@@ -68,4 +68,9 @@ object NetworkModule {
     @Provides @Singleton fun provideChatApi(r: Retrofit): ChatApi = r.create(ChatApi::class.java)
     @Provides @Singleton fun provideSlotApi(r: Retrofit): SlotApi = r.create(SlotApi::class.java)
     @Provides @Singleton fun provideAiApi(r: Retrofit): AiApi = r.create(AiApi::class.java)
+    @Provides @Singleton fun provideReviewApi(r: Retrofit): ReviewApi = r.create(ReviewApi::class.java)
+    @Provides @Singleton fun provideConsultationApi(r: Retrofit): ConsultationApi = r.create(ConsultationApi::class.java)
+    @Provides @Singleton fun provideMedicalRecordApi(r: Retrofit): MedicalRecordApi = r.create(MedicalRecordApi::class.java)
+    @Provides @Singleton fun provideMedicalDocumentApi(r: Retrofit): MedicalDocumentApi = r.create(MedicalDocumentApi::class.java)
+    @Provides @Singleton fun provideFollowUpApi(r: Retrofit): FollowUpApi = r.create(FollowUpApi::class.java)
 }

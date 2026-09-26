@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Person
@@ -476,6 +477,34 @@ fun AppointmentSummaryCard(appt: Appointment, modifier: Modifier = Modifier, onJ
                 IconButton(onClick = onJoinClick) {
                     Icon(Icons.Default.VideoCall, contentDescription = "Join consultation", tint = PrimaryBlue)
                 }
+            }
+        }
+    }
+}
+
+// ── Follow-up Summary Card ──────────────────────────────────────────────────
+@Composable
+fun FollowUpSummaryCard(followUp: com.mediwise.domain.model.FollowUp, modifier: Modifier = Modifier, onBookNowClick: () -> Unit) {
+    AppCard(modifier = modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(48.dp).clip(MaterialTheme.shapes.medium).background(PrimaryBlueLight),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.EventRepeat, contentDescription = null, tint = PrimaryBlue) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    followUp.reason.ifBlank { "Follow-up recommended" },
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1
+                )
+                Text(
+                    followUp.recommendedDate.ifBlank { "No date specified" },
+                    style = MaterialTheme.typography.bodySmall, color = TextSecondary
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onBookNowClick) {
+                Text("Book now")
             }
         }
     }

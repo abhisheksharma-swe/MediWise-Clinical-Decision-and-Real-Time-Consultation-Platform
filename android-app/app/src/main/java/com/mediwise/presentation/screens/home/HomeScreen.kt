@@ -85,7 +85,7 @@ fun HomeScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Good Afternoon!", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                             Spacer(Modifier.width(4.dp))
-                        }
+                         }
                         Text(uiState.userName.ifBlank { "User" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
                 },
@@ -235,6 +235,25 @@ fun HomeScreen(
                             onJoinClick = if (appt.status in joinableStatuses) {
                                 { navController.navigate(Screen.Chat.createRoute("appointment_${appt.id}")) }
                             } else null
+                        )
+                    }
+                }
+
+                // ── Upcoming Follow-ups — patient-only, doctor-recommended re-visits ──────
+                if (!uiState.isDoctor && uiState.upcomingFollowUps.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Upcoming Follow-ups",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                    items(uiState.upcomingFollowUps.take(3)) { followUp ->
+                        FollowUpSummaryCard(
+                            followUp = followUp,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            onBookNowClick = { navController.navigate(Screen.Schedule.createRoute(followUp.doctorId)) }
                         )
                     }
                 }

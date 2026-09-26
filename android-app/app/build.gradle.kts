@@ -46,6 +46,7 @@ val releaseWsUrl = resolveProperty("RELEASE_WS_URL")
 val releaseGoogleWebClientId = resolveProperty("RELEASE_GOOGLE_WEB_CLIENT_ID")
 
 fun validateReleaseConfig() {
+
     val problems = mutableListOf<String>()
     if (releaseBaseUrl.isNullOrBlank() || releaseBaseUrl == placeholderBaseUrl) {
         problems += "RELEASE_BASE_URL is missing or still the placeholder ($placeholderBaseUrl). Set it via -PRELEASE_BASE_URL=, local.properties, or an env var."

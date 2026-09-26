@@ -1,15 +1,13 @@
 package com.mediwise.chat.service;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.mediwise.chat.dto.ChatMediaUploadResponse;
 import com.mediwise.chat.dto.SendMessageRequest;
 import com.mediwise.chat.model.ChatMessage;
 import com.mediwise.chat.repository.ChatMessageRepository;
 import com.mediwise.common.exception.BusinessException;
+import com.mediwise.common.storage.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
@@ -29,16 +26,10 @@ import java.util.UUID;
 public class ChatService {
 
     private final ChatMessageRepository messageRepository;
-    private final AmazonS3 amazonS3;
+    private final S3StorageService s3StorageService;
 
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
-
-    @Value("${application.aws.s3.bucket}")
-    private String bucket;
-
-    @Value("${application.aws.s3.base-url}")
-    private String s3BaseUrl;
 
     private static final int RECENT_CACHE_SIZE = 50;
     private static final Duration CACHE_TTL = Duration.ofMinutes(30);
@@ -78,17 +69,7 @@ public class ChatService {
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "attachment";
         String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf('.')) : "";
         String key = "chat/" + roomId + "/" + uploaderId + "/" + UUID.randomUUID() + extension;
-
-        try {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(contentType);
-            metadata.setContentLength(file.getSize());
-            amazonS3.putObject(bucket, key, file.getInputStream(), metadata);
-        } catch (IOException e) {
-            throw new BusinessException("UPLOAD_FAILED", "Failed to upload attachment: " + e.getMessage());
-        }
-
-        String url = s3BaseUrl + "/" + key;
+        String url = s3StorageService.uploadPublic(key, file);
         log.info("Chat attachment uploaded to room {} by {}: {}", roomId, uploaderId, url);
         return ChatMediaUploadResponse.builder()
                 .url(url)

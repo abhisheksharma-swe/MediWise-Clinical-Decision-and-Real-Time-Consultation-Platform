@@ -10,6 +10,7 @@ import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.UnauthorizedException;
+import com.mediwise.common.security.AppointmentAuthorizationService;
 import com.mediwise.doctor.dto.DoctorResponse;
 import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
@@ -61,6 +62,7 @@ public class AiService {
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final AppointmentAuthorizationService authorizationService;
 
     @Value("${application.ai-service.gemini-api-key:}")
     private String geminiApiKey;
@@ -77,6 +79,10 @@ public class AiService {
     private static final List<String> PLATFORM_SPECIALTIES = List.of(
             "Cardiology", "General Medicine", "Dermatology",
             "Neurology", "Pediatrics", "Orthopedics", "Emergency Medicine"
+    );
+
+    private static final List<String> CARE_CATEGORIES = List.of(
+            "Pediatric Care", "Urgent Care", "Routine Consultation"
     );
 
     private static final List<String> EMERGENCY_KEYWORDS = List.of(
@@ -101,7 +107,11 @@ public class AiService {
         log.setLoggedAt(Instant.now());
         symptomLogRepository.save(log);
 
-        AiReport report = analyzeWithGemini(request);
+        // Server-computed from the patient's own profile — never trusts a client-supplied age,
+        // which would let a client spoof pediatric/elderly routing.
+        Integer patientAge = resolvePatientAge(request.getPatientId());
+
+        AiReport report = analyzeWithGemini(request, patientAge);
         AiReport saved = aiReportRepository.save(report);
 
         List<DoctorResponse> matchedDoctors = findMatchingDoctors(saved.getSuggestedSpecialty());
@@ -110,7 +120,7 @@ public class AiService {
     }
 
     public List<AiReportResponse> getReportsForPatient(UUID patientId, User user) {
-        assertCanViewReports(patientId, user);
+        authorizationService.assertCanViewPatientHistory(patientId, user);
         return aiReportRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
                 .stream()
                 .map(r -> toResponse(r, findMatchingDoctors(r.getSuggestedSpecialty())))
@@ -118,7 +128,7 @@ public class AiService {
     }
 
     public AiReportResponse getLatestReport(UUID patientId, User user) {
-        assertCanViewReports(patientId, user);
+        authorizationService.assertCanViewPatientHistory(patientId, user);
         return aiReportRepository.findTopByPatientIdOrderByCreatedAtDesc(patientId)
                 .map(r -> toResponse(r, findMatchingDoctors(r.getSuggestedSpecialty())))
                 .orElse(null);
@@ -178,48 +188,42 @@ public class AiService {
         throw new UnauthorizedException("You do not have permission to log symptoms for this patient.");
     }
 
-    private void assertCanViewReports(UUID patientId, User user) {
-        if (user.getRole() == User.Role.ADMIN) {
-            return;
-        }
-
-        if (user.getRole() == User.Role.PATIENT) {
-            UUID ownPatientId = patientProfileRepository.findByUserId(user.getId())
-                    .map(PatientProfile::getId).orElse(null);
-            if (patientId.equals(ownPatientId)) {
-                return;
-            }
-        } else if (user.getRole() == User.Role.DOCTOR) {
-            UUID doctorId = doctorRepository.findByUserId(user.getId())
-                    .map(Doctor::getId).orElse(null);
-            if (doctorId != null && appointmentRepository.existsByDoctorIdAndPatientId(doctorId, patientId)) {
-                return;
-            }
-        }
-
-        throw new UnauthorizedException("You do not have permission to view reports for this patient.");
-    }
-
     // ─── Gemini integration ─────────────────────────────────────────────────
 
-    private AiReport analyzeWithGemini(SymptomLogRequest req) {
+    private AiReport analyzeWithGemini(SymptomLogRequest req, Integer patientAge) {
         if (geminiApiKey == null || geminiApiKey.isBlank()) {
             log.warn("Gemini API key not configured — returning safe fallback response");
-            return applyEmergencyOverride(fallbackReport(req, "AI analysis is currently unavailable."), req);
+            return applyEmergencyOverride(fallbackReport(req, "AI analysis is currently unavailable.", patientAge), req);
         }
 
         try {
-            String prompt = buildPrompt(req);
+            String prompt = buildPrompt(req, patientAge);
             String rawResponse = callGemini(prompt);
-            AiReport report = parseGeminiResponse(rawResponse, req);
+            AiReport report = parseGeminiResponse(rawResponse, req, patientAge);
             return applyEmergencyOverride(report, req);
         } catch (Exception e) {
             log.error("Gemini symptom analysis failed: {}", e.getMessage(), e);
-            return applyEmergencyOverride(fallbackReport(req, "AI analysis failed — please consult a doctor directly."), req);
+            return applyEmergencyOverride(
+                    fallbackReport(req, "AI analysis failed — please consult a doctor directly.", patientAge), req);
         }
     }
 
-    private String buildPrompt(SymptomLogRequest req) {
+    /** Never trusts client input — derived from the patient's own stored date of birth. */
+    private Integer resolvePatientAge(java.util.UUID patientId) {
+        return patientProfileRepository.findById(patientId)
+                .map(com.mediwise.profile.model.PatientProfile::getDob)
+                .filter(java.util.Objects::nonNull)
+                .map(dob -> java.time.Period.between(dob, java.time.LocalDate.now()).getYears())
+                .orElse(null);
+    }
+
+    private String defaultCareCategory(Integer patientAge, int urgencyScore) {
+        if (urgencyScore >= 90) return "Urgent Care";
+        if (patientAge != null && patientAge < 18) return "Pediatric Care";
+        return "Routine Consultation";
+    }
+
+    private String buildPrompt(SymptomLogRequest req, Integer patientAge) {
         StringBuilder vitals = new StringBuilder();
         if (req.getHeartRate() != null) vitals.append("Heart rate: ").append(req.getHeartRate()).append(" bpm. ");
         if (req.getSystolicBp() != null && req.getDiastolicBp() != null)
@@ -228,12 +232,14 @@ public class AiService {
         if (req.getTemperature() != null) vitals.append("Temperature: ").append(req.getTemperature()).append("°C. ");
 
         String specialtyList = String.join(", ", PLATFORM_SPECIALTIES);
+        String careCategoryList = String.join(", ", CARE_CATEGORIES);
 
         return """
                 You are a medical triage assistant helping a patient understand which type of \
                 doctor to see and how urgent their situation is. You are NOT diagnosing them — \
                 you are suggesting a specialty and a general urgency level only.
 
+                Patient age: %s
                 Patient-reported symptoms: %s
                 Reported severity: %s
                 Additional notes: %s
@@ -242,11 +248,16 @@ public class AiService {
                 IMPORTANT: For "suggestedSpecialty", you MUST choose exactly one value from this \
                 fixed list — do not invent or vary the wording: %s
 
+                IMPORTANT: For "careCategory", you MUST choose exactly one value from this fixed \
+                list, using the patient's age to route pediatric patients (under 18) to "Pediatric \
+                Care" and emergencies to "Urgent Care": %s
+
                 Respond with ONLY a valid JSON object (no markdown, no code fences, no extra text) \
                 in exactly this shape:
                 {
                   "urgencyScore": <integer 0-100, where 100 is a life-threatening emergency>,
                   "suggestedSpecialty": "<one value exactly as written from the list above>",
+                  "careCategory": "<one value exactly as written from the care category list above>",
                   "confidence": <float 0.0-1.0>,
                   "recommendation": "<2-3 sentences: what this might suggest, whether to see a doctor soon or it's likely minor, and simple safe home-care advice ONLY if the symptoms appear mild. Never state a definitive diagnosis. Always suggest consulting a doctor for confirmation.>",
                   "riskFactors": ["<short phrase>", "<short phrase>"]
@@ -254,14 +265,17 @@ public class AiService {
 
                 If any symptom could indicate a medical emergency (e.g. chest pain, difficulty \
                 breathing, stroke signs, severe bleeding, loss of consciousness), set urgencyScore \
-                to 90 or above, suggestedSpecialty to "Emergency Medicine", and the recommendation \
-                must tell the patient to seek emergency care immediately rather than home remedies.
+                to 90 or above, suggestedSpecialty to "Emergency Medicine", careCategory to \
+                "Urgent Care", and the recommendation must tell the patient to seek emergency care \
+                immediately rather than home remedies.
                 """.formatted(
+                patientAge != null ? patientAge + " years" : "not specified",
                 String.join(", ", req.getSymptoms()),
                 req.getSeverity() != null ? req.getSeverity() : "not specified",
                 req.getNotes() != null && !req.getNotes().isBlank() ? req.getNotes() : "none",
                 !vitals.isEmpty() ? vitals.toString() : "not provided",
-                specialtyList
+                specialtyList,
+                careCategoryList
         );
     }
 
@@ -296,7 +310,7 @@ public class AiService {
                 .getString("text");
     }
 
-    private AiReport parseGeminiResponse(String rawText, SymptomLogRequest req) {
+    private AiReport parseGeminiResponse(String rawText, SymptomLogRequest req, Integer patientAge) {
         String cleaned = rawText.trim();
         if (cleaned.startsWith("```")) {
             cleaned = cleaned.replaceAll("^```(json)?", "").replaceAll("```$", "").trim();
@@ -318,6 +332,13 @@ public class AiService {
             specialty = "General Medicine";
         }
         report.setSuggestedSpecialty(specialty);
+
+        int urgencyScore = report.getUrgencyScore();
+        String careCategory = json.optString("careCategory", "");
+        if (!CARE_CATEGORIES.contains(careCategory)) {
+            careCategory = defaultCareCategory(patientAge, urgencyScore);
+        }
+        report.setCareCategory(careCategory);
 
         report.setConfidence(json.optDouble("confidence", 0.5));
 
@@ -345,6 +366,7 @@ public class AiService {
         if (isEmergency) {
             report.setUrgencyScore(100);
             report.setSuggestedSpecialty("Emergency Medicine");
+            report.setCareCategory("Urgent Care");
             report.setRecommendation(
                     "Your symptoms may indicate a medical emergency. Please seek emergency care immediately " +
                             "or call emergency services. This is an AI-generated suggestion and is not a substitute " +
@@ -353,7 +375,7 @@ public class AiService {
         return report;
     }
 
-    private AiReport fallbackReport(SymptomLogRequest req, String reason) {
+    private AiReport fallbackReport(SymptomLogRequest req, String reason, Integer patientAge) {
         AiReport report = new AiReport();
         report.setPatientId(req.getPatientId());
         report.setAppointmentId(req.getAppointmentId());
@@ -361,6 +383,7 @@ public class AiService {
         report.setModelVersion(MODEL_VERSION);
         report.setUrgencyScore(50);
         report.setSuggestedSpecialty("General Medicine");
+        report.setCareCategory(defaultCareCategory(patientAge, 50));
         report.setConfidence(0.0);
         report.setRecommendation(reason + " Please consult a doctor to discuss your symptoms. " +
                 "This is an AI-generated suggestion and is not a substitute for professional medical advice.");
@@ -378,6 +401,7 @@ public class AiService {
                 .modelVersion(r.getModelVersion())
                 .urgencyScore(r.getUrgencyScore())
                 .suggestedSpecialty(r.getSuggestedSpecialty())
+                .careCategory(r.getCareCategory())
                 .confidence(r.getConfidence())
                 .recommendation(r.getRecommendation())
                 .riskFactors(r.getRiskFactors())

@@ -30,6 +30,10 @@ public class AiReport {
     private String recommendation;
     private List<String> riskFactors;
 
+    /** Distinct from suggestedSpecialty — a first-class field for age-aware routing
+     *  (e.g. "Pediatric Care", "Urgent Care", "Routine Consultation"). */
+    private String careCategory;
+
     @Indexed
     private Instant createdAt;
 }

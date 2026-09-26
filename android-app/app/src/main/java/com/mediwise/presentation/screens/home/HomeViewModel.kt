@@ -6,6 +6,7 @@ import com.mediwise.core.datastore.SessionDataStore
 import com.mediwise.core.network.AppNotificationSocket
 import com.mediwise.domain.model.Appointment
 import com.mediwise.domain.model.Doctor
+import com.mediwise.domain.model.FollowUp
 import com.mediwise.domain.model.Role
 import com.mediwise.core.result.onSuccess
 import com.mediwise.core.result.onError
@@ -14,6 +15,7 @@ import com.mediwise.domain.repository.DoctorRepository
 import com.mediwise.domain.repository.NotificationRepository
 import com.mediwise.domain.usecase.appointment.GetMyAppointmentsUseCase
 import com.mediwise.domain.usecase.doctor.GetDoctorsUseCase
+import com.mediwise.domain.usecase.followup.GetMyFollowUpsUseCase
 import com.mediwise.domain.usecase.profile.GetProfileUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,7 @@ data class HomeUiState(
     val userName: String = "User",
     val unreadNotifications: Int = 0,
     val upcomingAppointments: List<Appointment> = emptyList(),
+    val upcomingFollowUps: List<FollowUp> = emptyList(),
     val topDoctors: List<Doctor> = emptyList(),
     val error: String? = null
 )
@@ -38,6 +41,7 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val getDoctorsUseCase: GetDoctorsUseCase,
     private val getAppointmentsUseCase: GetMyAppointmentsUseCase,
+    private val getMyFollowUpsUseCase: GetMyFollowUpsUseCase,
     private val getProfileUseCase: GetProfileUseCase,
     private val doctorRepository: DoctorRepository,
     private val appointmentRepository: AppointmentRepository,
@@ -98,6 +102,12 @@ class HomeViewModel @Inject constructor(
 
         getAppointmentsUseCase(status = "PENDING,CONFIRMED", page = 0, size = 5)
             .onSuccess { appts -> _uiState.update { it.copy(upcomingAppointments = appts) } }
+
+        getMyFollowUpsUseCase()
+            .onSuccess { followUps ->
+                val upcoming = followUps.filter { it.status == "PENDING" || it.status == "SCHEDULED" }
+                _uiState.update { it.copy(upcomingFollowUps = upcoming) }
+            }
     }
 
     // Patient- and doctor-facing profile/appointment data live on entirely separate

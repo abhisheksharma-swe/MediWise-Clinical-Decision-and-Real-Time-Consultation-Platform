@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
+import org.webrtc.Camera2Enumerator
+import org.webrtc.CameraVideoCapturer
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
@@ -35,8 +37,13 @@ import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
+import org.webrtc.RtpReceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
+import org.webrtc.SurfaceTextureHelper
+import org.webrtc.SurfaceViewRenderer
+import org.webrtc.VideoSource
+import org.webrtc.VideoTrack
 import javax.inject.Inject
 
 data class CallUiState(
@@ -49,6 +56,7 @@ data class CallUiState(
      * user has tapped Accept - WebRTC/the mic aren't touched until this flips true. */
     val hasAccepted: Boolean = true,
     val isMuted: Boolean = false,
+    val isFrontCamera: Boolean = true,
     val elapsedSeconds: Int = 0,
     val error: String? = null
 )
@@ -76,6 +84,13 @@ class CallViewModel @Inject constructor(
     private var peerConnection: PeerConnection? = null
     private var localAudioSource: AudioSource? = null
     private var localAudioTrack: AudioTrack? = null
+    private var videoCapturer: CameraVideoCapturer? = null
+    private var surfaceTextureHelper: SurfaceTextureHelper? = null
+    private var localVideoSource: VideoSource? = null
+    private var localVideoTrack: VideoTrack? = null
+    private var remoteVideoTrack: VideoTrack? = null
+    private var localRenderer: SurfaceViewRenderer? = null
+    private var remoteRenderer: SurfaceViewRenderer? = null
     private val pendingRemoteIceCandidates = mutableListOf<IceCandidate>()
     private val eglBase: EglBase = EglBase.create()
 
@@ -94,8 +109,48 @@ class CallViewModel @Inject constructor(
         PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
     )
 
-    /** Renderer surfaces (video, Phase D) reuse this same factory-owned context - exposed so CallScreen can init a SurfaceViewRenderer against the same EGL context. */
+    /** Renderer surfaces reuse this same factory-owned context - exposed so CallScreen can init a SurfaceViewRenderer against the same EGL context. */
     fun eglBaseContext(): EglBase.Context = eglBase.eglBaseContext
+
+    /** Called once CallScreen's local-preview AndroidView creates its SurfaceViewRenderer. */
+    fun attachLocalRenderer(renderer: SurfaceViewRenderer) {
+        renderer.init(eglBase.eglBaseContext, null)
+        renderer.setMirror(_uiState.value.isFrontCamera)
+        localRenderer = renderer
+        localVideoTrack?.addSink(renderer)
+    }
+
+    fun detachLocalRenderer(renderer: SurfaceViewRenderer) {
+        localVideoTrack?.removeSink(renderer)
+        if (localRenderer === renderer) localRenderer = null
+        renderer.release()
+    }
+
+    /** Called once CallScreen's remote-video AndroidView creates its SurfaceViewRenderer. */
+    fun attachRemoteRenderer(renderer: SurfaceViewRenderer) {
+        renderer.init(eglBase.eglBaseContext, null)
+        remoteRenderer = renderer
+        remoteVideoTrack?.addSink(renderer)
+    }
+
+    fun detachRemoteRenderer(renderer: SurfaceViewRenderer) {
+        remoteVideoTrack?.removeSink(renderer)
+        if (remoteRenderer === renderer) remoteRenderer = null
+        renderer.release()
+    }
+
+    fun switchCamera() {
+        val capturer = videoCapturer ?: return
+        capturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
+            override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                _uiState.update { it.copy(isFrontCamera = isFrontCamera) }
+                localRenderer?.setMirror(isFrontCamera)
+            }
+            override fun onCameraSwitchError(error: String?) {
+                Log.w(TAG, "Camera switch failed: $error")
+            }
+        })
+    }
 
     fun startOutgoingCall(roomId: String, recipientId: String, mediaType: CallMediaType) {
         if (started) return
@@ -308,7 +363,13 @@ class CallViewModel @Inject constructor(
             override fun onDataChannel(channel: org.webrtc.DataChannel) {}
             override fun onRenegotiationNeeded() {}
             override fun onSignalingChange(state: PeerConnection.SignalingState) {}
-            override fun onAddTrack(receiver: org.webrtc.RtpReceiver, streams: Array<out MediaStream>) {}
+            override fun onAddTrack(receiver: RtpReceiver, streams: Array<out MediaStream>) {
+                val track = receiver.track()
+                if (track is VideoTrack) {
+                    remoteVideoTrack = track
+                    remoteRenderer?.let { track.addSink(it) }
+                }
+            }
         })
         peerConnection = pc
 
@@ -319,6 +380,40 @@ class CallViewModel @Inject constructor(
         track.setEnabled(!_uiState.value.isMuted)
         localAudioTrack = track
         pc?.addTrack(track, listOf("stream_$roomId"))
+
+        if (_uiState.value.mediaType == CallMediaType.VIDEO) {
+            createAndAddLocalVideoTrack(pc, roomId)
+        }
+    }
+
+    private fun createAndAddLocalVideoTrack(pc: PeerConnection?, roomId: String) {
+        val enumerator = Camera2Enumerator(appContext)
+        val deviceName = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+            ?: enumerator.deviceNames.firstOrNull()
+        if (deviceName == null) {
+            Log.w(TAG, "No camera available - continuing as audio-only")
+            return
+        }
+        val capturer = enumerator.createCapturer(deviceName, null)
+        if (capturer == null) {
+            Log.w(TAG, "Failed to create camera capturer - continuing as audio-only")
+            return
+        }
+        videoCapturer = capturer
+        _uiState.update { it.copy(isFrontCamera = enumerator.isFrontFacing(deviceName)) }
+
+        val helper = SurfaceTextureHelper.create("CaptureThread", eglBase.eglBaseContext)
+        surfaceTextureHelper = helper
+        val videoSource = factory().createVideoSource(capturer.isScreencast)
+        localVideoSource = videoSource
+        capturer.initialize(helper, appContext, videoSource.capturerObserver)
+        capturer.startCapture(1280, 720, 30)
+
+        val videoTrack = factory().createVideoTrack("video_$roomId", videoSource)
+        videoTrack.setEnabled(true)
+        localVideoTrack = videoTrack
+        localRenderer?.let { videoTrack.addSink(it) }
+        pc?.addTrack(videoTrack, listOf("stream_$roomId"))
     }
 
     private fun applyRemoteOfferAndAnswer(sdp: String) {
@@ -471,6 +566,18 @@ class CallViewModel @Inject constructor(
         localAudioTrack = null
         localAudioSource?.dispose()
         localAudioSource = null
+        localRenderer?.let { localVideoTrack?.removeSink(it) }
+        remoteRenderer?.let { remoteVideoTrack?.removeSink(it) }
+        localVideoTrack?.dispose()
+        localVideoTrack = null
+        remoteVideoTrack = null
+        try { videoCapturer?.stopCapture() } catch (e: InterruptedException) { Log.w(TAG, "stopCapture interrupted", e) }
+        videoCapturer?.dispose()
+        videoCapturer = null
+        localVideoSource?.dispose()
+        localVideoSource = null
+        surfaceTextureHelper?.dispose()
+        surfaceTextureHelper = null
         peerConnection?.close()
         peerConnection?.dispose()
         peerConnection = null

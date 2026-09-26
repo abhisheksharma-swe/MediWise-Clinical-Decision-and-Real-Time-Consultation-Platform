@@ -65,6 +65,16 @@ class AppointmentRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun rescheduleAppointment(id: String, newSlotId: String): Result<Appointment> {
+        return safeApiCall {
+            val request = RescheduleAppointmentRequestDto(newSlotId = newSlotId)
+            val response = api.rescheduleAppointment(id, request)
+            val rescheduled = response.data!!.toDomain()
+            appointmentDao.insertAppointment(rescheduled.toEntity())
+            rescheduled
+        }
+    }
+
     override suspend fun getDoctorAppointments(status: String?, page: Int, size: Int): Result<List<Appointment>> {
         val result = safeApiCall {
             val response = api.getDoctorAppointments(status, page, size)
@@ -77,15 +87,6 @@ class AppointmentRepositoryImpl @Inject constructor(
         return result
     }
 
-    override suspend fun getMyConsultationHistory(page: Int, size: Int): Result<List<com.mediwise.domain.model.ConsultationRecord>> =
-        safeApiCall {
-            api.getMyConsultationHistory(page, size).data?.content?.map { it.toConsultationRecord() } ?: emptyList()
-        }
-
-    override suspend fun getPatientConsultationHistory(patientId: String, page: Int, size: Int): Result<List<com.mediwise.domain.model.ConsultationRecord>> =
-        safeApiCall {
-            api.getPatientConsultationHistory(patientId, page, size).data?.content?.map { it.toConsultationRecord() } ?: emptyList()
-        }
 
     override suspend fun startAppointment(id: String): Result<Appointment> {
         return safeApiCall {

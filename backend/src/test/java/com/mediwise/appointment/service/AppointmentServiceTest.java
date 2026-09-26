@@ -3,18 +3,22 @@ package com.mediwise.appointment.service;
 import com.mediwise.appointment.dto.BookAppointmentRequest;
 import com.mediwise.appointment.dto.CancelRequest;
 import com.mediwise.appointment.dto.CompleteAppointmentRequest;
+import com.mediwise.appointment.dto.RescheduleAppointmentRequest;
 import com.mediwise.appointment.event.AppointmentBookedEvent;
 import com.mediwise.appointment.event.AppointmentCancelledEvent;
 import com.mediwise.appointment.event.AppointmentCompletedEvent;
 import com.mediwise.appointment.event.AppointmentNoShowEvent;
+import com.mediwise.appointment.event.AppointmentRescheduledEvent;
 import com.mediwise.appointment.event.AppointmentStartedEvent;
 import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.BusinessException;
 import com.mediwise.common.exception.SlotConflictException;
+import com.mediwise.common.security.AppointmentAuthorizationService;
 import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
+import com.mediwise.followup.repository.FollowUpRepository;
 import com.mediwise.profile.model.PatientProfile;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import com.mediwise.schedule.model.TimeSlot;
@@ -60,6 +64,10 @@ class AppointmentServiceTest {
     private PatientProfileRepository patientProfileRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private AppointmentAuthorizationService authorizationService;
+    @Mock
+    private FollowUpRepository followUpRepository;
 
     @InjectMocks
     private AppointmentService appointmentService;
@@ -94,11 +102,6 @@ class AppointmentServiceTest {
                 .build();
     }
 
-    private void stubDoctorOwnsAppointment() {
-        when(doctorRepository.findByUserId(doctorUserId))
-                .thenReturn(Optional.of(Doctor.builder().id(doctorId).userId(doctorUserId).build()));
-    }
-
     // ── cancel ──────────────────────────────────────────────────────────────
 
     @Test
@@ -106,8 +109,6 @@ class AppointmentServiceTest {
     void cancel_success_publishesEvent() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.PENDING);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        when(patientProfileRepository.findByUserId(patientUserId))
-                .thenReturn(Optional.of(PatientProfile.builder().id(patientId).userId(patientUserId).build()));
 
         appointmentService.cancelAppointment(appointmentId, patientUser, new CancelRequest());
 
@@ -125,8 +126,6 @@ class AppointmentServiceTest {
     void cancel_rejectsFromCompleted() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.COMPLETED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        when(patientProfileRepository.findByUserId(patientUserId))
-                .thenReturn(Optional.of(PatientProfile.builder().id(patientId).userId(patientUserId).build()));
 
         assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId, patientUser, new CancelRequest()))
                 .isInstanceOf(BusinessException.class);
@@ -139,8 +138,8 @@ class AppointmentServiceTest {
     void cancel_forbidsNonOwner() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.PENDING);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        when(patientProfileRepository.findByUserId(patientUserId))
-                .thenReturn(Optional.of(PatientProfile.builder().id(UUID.randomUUID()).userId(patientUserId).build()));
+        doThrow(new BusinessException("FORBIDDEN", "You do not have access to this appointment."))
+                .when(authorizationService).assertCanAccessAppointment(appt, patientUser);
 
         assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId, patientUser, new CancelRequest()))
                 .isInstanceOf(BusinessException.class);
@@ -155,7 +154,6 @@ class AppointmentServiceTest {
     void start_success_publishesEvent() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         appointmentService.startConsultation(appointmentId, doctorUser);
 
@@ -170,7 +168,6 @@ class AppointmentServiceTest {
     void start_rejectsWrongState() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.PENDING);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         assertThatThrownBy(() -> appointmentService.startConsultation(appointmentId, doctorUser))
                 .isInstanceOf(BusinessException.class);
@@ -183,8 +180,8 @@ class AppointmentServiceTest {
     void start_forbidsWrongDoctor() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        when(doctorRepository.findByUserId(doctorUserId))
-                .thenReturn(Optional.of(Doctor.builder().id(UUID.randomUUID()).userId(doctorUserId).build()));
+        doThrow(new BusinessException("FORBIDDEN", "You are not the assigned doctor for this appointment."))
+                .when(authorizationService).assertDoctorOwnsAppointment(appt, doctorUser);
 
         assertThatThrownBy(() -> appointmentService.startConsultation(appointmentId, doctorUser))
                 .isInstanceOf(BusinessException.class);
@@ -197,7 +194,6 @@ class AppointmentServiceTest {
     void start_idempotentRetry_returnsCurrentState() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.IN_PROGRESS);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         var response = appointmentService.startConsultation(appointmentId, doctorUser);
 
@@ -213,7 +209,6 @@ class AppointmentServiceTest {
     void complete_success_publishesEvent() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.IN_PROGRESS);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         CompleteAppointmentRequest request = new CompleteAppointmentRequest();
         request.setNotes("Patient responded well to treatment.");
@@ -232,7 +227,6 @@ class AppointmentServiceTest {
     void complete_rejectsWrongState() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         CompleteAppointmentRequest request = new CompleteAppointmentRequest();
         request.setNotes("notes");
@@ -249,7 +243,6 @@ class AppointmentServiceTest {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.COMPLETED);
         appt.setNotes("Original notes from the first successful call");
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         CompleteAppointmentRequest retry = new CompleteAppointmentRequest();
         retry.setNotes("A different resubmit that should NOT overwrite the record");
@@ -269,7 +262,6 @@ class AppointmentServiceTest {
     void noShow_success_publishesEvent() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         appointmentService.markNoShow(appointmentId, doctorUser);
 
@@ -284,7 +276,6 @@ class AppointmentServiceTest {
     void noShow_rejectsWrongState() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.IN_PROGRESS);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         assertThatThrownBy(() -> appointmentService.markNoShow(appointmentId, doctorUser))
                 .isInstanceOf(BusinessException.class);
@@ -297,7 +288,6 @@ class AppointmentServiceTest {
     void noShow_idempotentRetry_returnsCurrentState() {
         Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.NO_SHOW);
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
-        stubDoctorOwnsAppointment();
 
         var response = appointmentService.markNoShow(appointmentId, doctorUser);
 
@@ -417,5 +407,82 @@ class AppointmentServiceTest {
         ArgumentCaptor<AppointmentCancelledEvent> captor = ArgumentCaptor.forClass(AppointmentCancelledEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().getCancelledBy()).isNull();
+    }
+
+    // ── reschedule ──────────────────────────────────────────────────────────
+
+    private RescheduleAppointmentRequest rescheduleRequest(UUID newSlotId) {
+        RescheduleAppointmentRequest request = new RescheduleAppointmentRequest();
+        request.setNewSlotId(newSlotId);
+        return request;
+    }
+
+    @Test
+    @DisplayName("reschedule: moves a CONFIRMED appointment onto the newly locked slot and releases the old one")
+    void reschedule_success_movesSlotAndPublishesEvent() {
+        UUID oldSlotId = UUID.randomUUID();
+        UUID newSlotId = UUID.randomUUID();
+        Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
+        appt.setSlotId(oldSlotId);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        when(slotRepository.tryConsumeLockedSlot(newSlotId, patientUserId)).thenReturn(1);
+        when(slotRepository.findById(oldSlotId))
+                .thenReturn(Optional.of(TimeSlot.builder().id(oldSlotId).status(TimeSlot.SlotStatus.BOOKED).build()));
+
+        appointmentService.rescheduleAppointment(appointmentId, patientUser, rescheduleRequest(newSlotId));
+
+        assertThat(appt.getSlotId()).isEqualTo(newSlotId);
+        assertThat(appt.getOriginalSlotId()).isEqualTo(oldSlotId);
+        verify(appointmentRepository).save(appt);
+
+        ArgumentCaptor<TimeSlot> slotCaptor = ArgumentCaptor.forClass(TimeSlot.class);
+        verify(slotRepository).save(slotCaptor.capture());
+        assertThat(slotCaptor.getValue().getStatus()).isEqualTo(TimeSlot.SlotStatus.AVAILABLE);
+
+        ArgumentCaptor<AppointmentRescheduledEvent> eventCaptor = ArgumentCaptor.forClass(AppointmentRescheduledEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getOriginalSlotId()).isEqualTo(oldSlotId);
+    }
+
+    @Test
+    @DisplayName("reschedule: rejected when the appointment is not CONFIRMED")
+    void reschedule_rejectsWrongState() {
+        Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.PENDING);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+
+        assertThatThrownBy(() -> appointmentService.rescheduleAppointment(appointmentId, patientUser, rescheduleRequest(UUID.randomUUID())))
+                .isInstanceOf(BusinessException.class);
+
+        verify(slotRepository, never()).tryConsumeLockedSlot(any(), any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("reschedule: forbidden for someone who isn't the patient or doctor on the appointment")
+    void reschedule_forbidsNonOwner() {
+        Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        doThrow(new BusinessException("FORBIDDEN", "no access"))
+                .when(authorizationService).assertCanAccessAppointment(appt, patientUser);
+
+        assertThatThrownBy(() -> appointmentService.rescheduleAppointment(appointmentId, patientUser, rescheduleRequest(UUID.randomUUID())))
+                .isInstanceOf(BusinessException.class);
+
+        verify(slotRepository, never()).tryConsumeLockedSlot(any(), any());
+    }
+
+    @Test
+    @DisplayName("reschedule: a genuine conflict on the new slot (not locked by this user) is rejected")
+    void reschedule_slotConflict_throws() {
+        Appointment appt = appointmentWithStatus(Appointment.AppointmentStatus.CONFIRMED);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        UUID newSlotId = UUID.randomUUID();
+        when(slotRepository.tryConsumeLockedSlot(newSlotId, patientUserId)).thenReturn(0);
+
+        assertThatThrownBy(() -> appointmentService.rescheduleAppointment(appointmentId, patientUser, rescheduleRequest(newSlotId)))
+                .isInstanceOf(SlotConflictException.class);
+
+        verify(appointmentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

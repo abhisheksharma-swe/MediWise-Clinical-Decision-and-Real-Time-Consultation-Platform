@@ -28,6 +28,7 @@ enum class AppointmentTab { Upcoming, Past, Cancelled }
 fun AppointmentListScreen(
     onAppointmentClick: (String) -> Unit,
     onJoinClick: (String) -> Unit = {},
+    onRescheduleClick: (appointmentId: String, doctorId: String) -> Unit = { _, _ -> },
     refreshTick: Int = 0,
     viewModel: AppointmentViewModel = hiltViewModel()
 ) {
@@ -90,7 +91,8 @@ fun AppointmentListScreen(
                             isMutating = uiState.isCancelling,
                             onClick = { onAppointmentClick(appt.id) },
                             onCancel = { viewModel.cancelAppointment(appt.id) },
-                            onJoin = { onJoinClick(appt.id) }
+                            onJoin = { onJoinClick(appt.id) },
+                            onReschedule = { onRescheduleClick(appt.id, appt.doctorId) }
                         )
                     }
                 }
@@ -105,6 +107,7 @@ fun AppointmentCard(
     onClick: () -> Unit,
     onCancel: () -> Unit,
     onJoin: () -> Unit = {},
+    onReschedule: () -> Unit = {},
     isMutating: Boolean = false
 ) {
     Card(
@@ -147,8 +150,9 @@ fun AppointmentCard(
             }
 
             val canCancel = appointment.status == "CONFIRMED" || appointment.status == "PENDING"
+            val canReschedule = appointment.status == "CONFIRMED"
             val canJoin = appointment.status == "CONFIRMED" || appointment.status == "IN_PROGRESS"
-            if (canCancel || canJoin) {
+            if (canCancel || canJoin || canReschedule) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (canCancel) {
@@ -159,6 +163,16 @@ fun AppointmentCard(
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text("Cancel", fontSize = 13.sp, color = ErrorRed)
+                        }
+                    }
+                    if (canReschedule) {
+                        OutlinedButton(
+                            onClick = onReschedule,
+                            enabled = !isMutating,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Reschedule", fontSize = 13.sp)
                         }
                     }
                     if (canJoin) {

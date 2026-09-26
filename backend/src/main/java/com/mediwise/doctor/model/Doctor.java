@@ -67,6 +67,18 @@ public class Doctor {
     @Builder.Default
     private Set<String> specialties = new HashSet<>();
 
+    @Column(name = "clinic_name")
+    private String clinicName;
+
+    @Column(name = "clinic_address", columnDefinition = "TEXT")
+    private String clinicAddress;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "doctor_consultation_modes", joinColumns = @JoinColumn(name = "doctor_id"))
+    @Column(name = "mode")
+    @Builder.Default
+    private Set<String> consultationModes = new HashSet<>(Set.of("ONLINE"));
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

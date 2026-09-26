@@ -135,10 +135,9 @@ fun ChatScreen(
                             IconButton(
                                 onClick = {
                                     onVideoCallClick(uiState.otherPartyUserId, uiState.otherPartyName)
-                                },
-                                enabled = false
+                                }
                             ) {
-                                Icon(Icons.Default.VideoCall, contentDescription = "Video calls unavailable", tint = TextSecondary)
+                                Icon(Icons.Default.VideoCall, contentDescription = "Start video call", tint = PrimaryBlue)
                             }
                         }
                     }

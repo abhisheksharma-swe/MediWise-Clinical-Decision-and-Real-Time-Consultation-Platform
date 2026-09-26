@@ -68,24 +68,14 @@ interface AppointmentApi {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 10
     ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
-    @GET("api/v1/appointments/history")
-    suspend fun getMyConsultationHistory(
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
-
-    @GET("api/v1/appointments/patient/{patientId}/history")
-    suspend fun getPatientConsultationHistory(
-        @Path("patientId") patientId: String,
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): ApiResponseDto<PagedResponseDto<AppointmentDto>>
-
     @GET("api/v1/appointments/{id}")
     suspend fun getAppointmentById(@Path("id") id: String): ApiResponseDto<AppointmentDto>
 
     @PATCH("api/v1/appointments/{id}/cancel")
     suspend fun cancelAppointment(@Path("id") id: String, @Body request: CancelRequestDto): ApiResponseDto<AppointmentDto>
+
+    @PATCH("api/v1/appointments/{id}/reschedule")
+    suspend fun rescheduleAppointment(@Path("id") id: String, @Body request: RescheduleAppointmentRequestDto): ApiResponseDto<AppointmentDto>
 
     @GET("api/v1/appointments/doctor")
     suspend fun getDoctorAppointments(
@@ -166,6 +156,117 @@ interface SlotApi {
 
     @DELETE("api/v1/slots/{slotId}/lock")
     suspend fun releaseSlot(@Path("slotId") slotId: String): ApiResponseDto<Unit>
+}
+
+interface ConsultationApi {
+    @GET("api/v1/consultations/{appointmentId}")
+    suspend fun getForAppointment(@Path("appointmentId") appointmentId: String): ApiResponseDto<ConsultationDto?>
+
+    @PUT("api/v1/consultations/{appointmentId}")
+    suspend fun upsert(
+        @Path("appointmentId") appointmentId: String,
+        @Body request: UpdateConsultationRequestDto
+    ): ApiResponseDto<ConsultationDto>
+
+    @GET("api/v1/consultations/me")
+    suspend fun getMyHistory(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<ConsultationDto>>
+
+    @GET("api/v1/consultations/patient/{patientId}")
+    suspend fun getPatientHistory(
+        @Path("patientId") patientId: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<ConsultationDto>>
+
+    @POST("api/v1/consultations/{consultationId}/prescriptions")
+    suspend fun createPrescription(
+        @Path("consultationId") consultationId: String,
+        @Body request: CreatePrescriptionRequestDto
+    ): ApiResponseDto<PrescriptionDto>
+
+    @GET("api/v1/prescriptions/me")
+    suspend fun getMyPrescriptions(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<PrescriptionDto>>
+
+    @GET("api/v1/prescriptions/patient/{patientId}")
+    suspend fun getPrescriptionsForPatient(
+        @Path("patientId") patientId: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<PrescriptionDto>>
+}
+
+interface ReviewApi {
+    @POST("api/v1/appointments/{id}/review")
+    suspend fun submitReview(@Path("id") id: String, @Body request: SubmitReviewRequestDto): ApiResponseDto<ReviewDto>
+
+    @GET("api/v1/doctors/{id}/reviews")
+    suspend fun getReviewsForDoctor(
+        @Path("id") id: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): ApiResponseDto<PagedResponseDto<ReviewDto>>
+}
+
+interface MedicalRecordApi {
+    @GET("api/v1/medical-records/me")
+    suspend fun getMyRecord(): ApiResponseDto<MedicalRecordDto>
+
+    @POST("api/v1/medical-records/me/conditions")
+    suspend fun addMyCondition(@Body request: CreateConditionRequestDto): ApiResponseDto<ConditionDto>
+
+    @POST("api/v1/medical-records/me/allergies")
+    suspend fun addMyAllergy(@Body request: CreateAllergyRequestDto): ApiResponseDto<AllergyDto>
+
+    @POST("api/v1/medical-records/me/medications")
+    suspend fun addMyMedication(@Body request: CreateMedicationRequestDto): ApiResponseDto<MedicationDto>
+
+    @GET("api/v1/medical-records/{patientId}")
+    suspend fun getRecord(@Path("patientId") patientId: String): ApiResponseDto<MedicalRecordDto>
+
+    @POST("api/v1/medical-records/{patientId}/conditions")
+    suspend fun addCondition(@Path("patientId") patientId: String, @Body request: CreateConditionRequestDto): ApiResponseDto<ConditionDto>
+
+    @POST("api/v1/medical-records/{patientId}/allergies")
+    suspend fun addAllergy(@Path("patientId") patientId: String, @Body request: CreateAllergyRequestDto): ApiResponseDto<AllergyDto>
+
+    @POST("api/v1/medical-records/{patientId}/medications")
+    suspend fun addMedication(@Path("patientId") patientId: String, @Body request: CreateMedicationRequestDto): ApiResponseDto<MedicationDto>
+
+    @PATCH("api/v1/medical-records/conditions/{id}")
+    suspend fun updateConditionStatus(@Path("id") id: String, @Body request: UpdateConditionStatusRequestDto): ApiResponseDto<ConditionDto>
+}
+
+interface FollowUpApi {
+    @POST("api/v1/consultations/{consultationId}/follow-ups")
+    suspend fun create(@Path("consultationId") consultationId: String, @Body request: CreateFollowUpRequestDto): ApiResponseDto<FollowUpDto>
+
+    @GET("api/v1/follow-ups/me")
+    suspend fun getMyFollowUps(): ApiResponseDto<List<FollowUpDto>>
+
+    @GET("api/v1/follow-ups/patient/{patientId}")
+    suspend fun getForPatient(@Path("patientId") patientId: String): ApiResponseDto<List<FollowUpDto>>
+
+    @PATCH("api/v1/follow-ups/{id}/dismiss")
+    suspend fun dismiss(@Path("id") id: String): ApiResponseDto<FollowUpDto>
+}
+
+interface MedicalDocumentApi {
+    @Multipart
+    @POST("api/v1/medical-documents")
+    suspend fun upload(
+        @Part("patientId") patientId: okhttp3.RequestBody,
+        @Part("documentType") documentType: okhttp3.RequestBody,
+        @Part file: okhttp3.MultipartBody.Part
+    ): ApiResponseDto<MedicalDocumentDto>
+
+    @GET("api/v1/medical-documents/patient/{patientId}")
+    suspend fun listForPatient(@Path("patientId") patientId: String): ApiResponseDto<List<MedicalDocumentDto>>
 }
 
 interface AiApi {

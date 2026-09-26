@@ -18,4 +18,7 @@ public class BookAppointmentRequest {
     private Appointment.AppointmentType type = Appointment.AppointmentType.ONLINE;
 
     private String chiefComplaint;
+
+    /** Optional — set when this booking fulfils a doctor-recommended follow-up. */
+    private UUID followUpId;
 }

@@ -37,10 +37,10 @@ public class AuditAspect {
 
     /**
      * Intercepts all public methods in any class annotated with @Service
-     * inside the com.clinicalsystem package.
+     * inside the com.mediwise package.
      */
     @Around("within(@org.springframework.stereotype.Service *) && " +
-            "execution(public * com.clinicalsystem..*(..))")
+            "execution(public * com.mediwise..*(..))")
     public Object auditServiceCall(ProceedingJoinPoint pjp) throws Throwable {
 
         MethodSignature sig = (MethodSignature) pjp.getSignature();
@@ -60,6 +60,7 @@ public class AuditAspect {
         entry.setResourceType(resourceType);
         entry.setIpHash(ipHash);
         entry.setUserAgent(userAgent);
+        entry.setTimestamp(java.time.Instant.now());
 
         try {
             Object result = pjp.proceed();
