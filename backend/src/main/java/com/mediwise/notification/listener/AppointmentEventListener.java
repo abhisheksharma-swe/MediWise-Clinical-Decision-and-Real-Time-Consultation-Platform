@@ -5,8 +5,11 @@ import com.mediwise.appointment.event.AppointmentCancelledEvent;
 import com.mediwise.appointment.event.AppointmentCompletedEvent;
 import com.mediwise.appointment.event.AppointmentConfirmedEvent;
 import com.mediwise.appointment.event.AppointmentNoShowEvent;
+import com.mediwise.appointment.event.AppointmentRescheduledEvent;
 import com.mediwise.appointment.event.AppointmentStartedEvent;
 import com.mediwise.appointment.model.Appointment;
+import com.mediwise.appointment.model.AppointmentStatusHistory;
+import com.mediwise.appointment.repository.AppointmentStatusHistoryRepository;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.notification.service.NotificationService;
 import com.mediwise.profile.repository.PatientProfileRepository;
@@ -38,6 +41,7 @@ public class AppointmentEventListener {
     private final NotificationService notificationService;
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorRepository doctorRepository;
+    private final AppointmentStatusHistoryRepository appointmentStatusHistoryRepository;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -45,6 +49,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, null, null);
         notifyPatient(appt, "Appointment Scheduled",
                 "Your appointment has been scheduled successfully.", "APPOINTMENT_BOOKED");
         notifyDoctor(appt, "New Appointment Request",
@@ -57,6 +62,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, null, null);
         notifyPatient(appt, "Appointment Confirmed",
                 "Your payment was received and your appointment is confirmed.", "APPOINTMENT_CONFIRMED");
         notifyDoctor(appt, "Appointment Confirmed",
@@ -69,6 +75,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, event.getCancelledBy(), appt.getCancelReason());
         notifyPatient(appt, "Appointment Cancelled",
                 "Your appointment has been cancelled.", "APPOINTMENT_CANCELLED");
         notifyDoctor(appt, "Appointment Cancelled",
@@ -81,6 +88,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, null, null);
         notifyPatient(appt, "Consultation Started",
                 "Your doctor has started the consultation. Join now.", "APPOINTMENT_STARTED");
     }
@@ -91,6 +99,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, null, null);
         notifyPatient(appt, "Consultation Completed",
                 "Your consultation notes are ready to view.", "APPOINTMENT_COMPLETED");
     }
@@ -101,8 +110,34 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
+        recordStatusChange(appt, null, null, null);
         notifyPatient(appt, "Missed Appointment",
                 "You missed your scheduled appointment.", "APPOINTMENT_NO_SHOW");
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onAppointmentRescheduled(AppointmentRescheduledEvent event) {
+        Appointment appt = event.getAppointment();
+        if (appt == null) return;
+
+        recordStatusChange(appt, "RESCHEDULED", null, null);
+    }
+
+    private void recordStatusChange(Appointment appt, String oldStatusOverride, UUID changedBy, String reason) {
+        try {
+            AppointmentStatusHistory history = AppointmentStatusHistory.builder()
+                    .appointmentId(appt.getId())
+                    .oldStatus(oldStatusOverride)
+                    .newStatus(appt.getStatus() != null ? appt.getStatus().name() : null)
+                    .changedBy(changedBy)
+                    .reason(reason)
+                    .build();
+            appointmentStatusHistoryRepository.save(history);
+        } catch (Exception e) {
+            log.warn("Failed to persist appointment status history for appointment {}: {}",
+                    appt.getId(), e.getMessage());
+        }
     }
 
     private void notifyPatient(Appointment appt, String title, String body, String type) {
