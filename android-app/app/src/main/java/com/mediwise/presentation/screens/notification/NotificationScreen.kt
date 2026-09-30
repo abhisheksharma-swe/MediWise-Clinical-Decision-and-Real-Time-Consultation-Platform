@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,7 +50,7 @@ fun NotificationScreen(
                                     Text(
                                         "$unreadCount",
                                         fontSize = 11.sp,
-                                        color = androidx.compose.ui.graphics.Color.White,
+                                        color = Color.White,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -188,7 +189,7 @@ private fun NotificationRow(notification: Notification, onClick: () -> Unit) {
     }
 }
 
-private fun notificationIcon(type: String): Pair<ImageVector, androidx.compose.ui.graphics.Color> =
+private fun notificationIcon(type: String): Pair<ImageVector, Color> =
     when (type) {
         "APPOINTMENT_CONFIRMED" -> Icons.Default.CheckCircle to AccentGreen
         "APPOINTMENT_REMINDER"  -> Icons.Default.Alarm to WarningAmber

@@ -3,9 +3,12 @@ package com.mediwise.auth.controller;
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
 import com.mediwise.auth.service.AuthService;
+import com.mediwise.chat.util.ChatRateLimiter;
+import com.mediwise.common.exception.RateLimitExceededException;
 import com.mediwise.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +17,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +27,28 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
+    // Reuses the same sliding-window limiter already proven for chat/call STOMP traffic —
+    // these are the classic brute-force/enumeration targets (login, register, password
+    // reset) and previously had no rate limiting at all.
+    private final ChatRateLimiter rateLimiter;
+
+    private static final int MAX_ATTEMPTS_PER_WINDOW = 10;
+    private static final Duration RATE_LIMIT_WINDOW = Duration.ofMinutes(15);
+
+    private void enforceRateLimit(String action, HttpServletRequest request) {
+        String key = action + ":" + clientIp(request);
+        if (!rateLimiter.allow(key, MAX_ATTEMPTS_PER_WINDOW, RATE_LIMIT_WINDOW)) {
+            throw new RateLimitExceededException("Too many attempts. Please try again later.");
+        }
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
 
     @GetMapping("/config")
     @Operation(summary = "Get MediWise system configuration and health status for Splash screen")
@@ -34,7 +60,8 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register a new MediWise user account (Patient/Doctor/Admin)")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
-            @Valid @RequestBody RegisterRequest request) {
+            @Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        enforceRateLimit("auth.register", httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(authService.register(request), "Registration successful"));
     }
@@ -42,7 +69,8 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary = "Login with credentials (email/phone + password) or Firebase token")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
-            @RequestBody LoginRequest request) {
+            @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        enforceRateLimit("auth.login", httpRequest);
         return ResponseEntity.ok(ApiResponse.success(authService.login(request), "Login successful"));
     }
 
@@ -56,7 +84,8 @@ public class AuthController {
     @PostMapping("/forgot-password")
     @Operation(summary = "Initiate forgot password request")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
-            @Valid @RequestBody ForgotPasswordRequest request) {
+            @Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest httpRequest) {
+        enforceRateLimit("auth.forgot-password", httpRequest);
         authService.forgotPassword(request);
         return ResponseEntity.ok(ApiResponse.message("If an account exists, a reset code has been sent."));
     }
@@ -64,7 +93,8 @@ public class AuthController {
     @PostMapping("/reset-password")
     @Operation(summary = "Set new password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request) {
+            @Valid @RequestBody ResetPasswordRequest request, HttpServletRequest httpRequest) {
+        enforceRateLimit("auth.reset-password", httpRequest);
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.message("Password has been reset successfully. Please log in."));
     }

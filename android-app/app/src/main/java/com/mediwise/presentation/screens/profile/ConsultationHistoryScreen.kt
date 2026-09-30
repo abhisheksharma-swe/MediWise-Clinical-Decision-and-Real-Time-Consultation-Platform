@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,7 +85,7 @@ fun ConsultationHistoryScreen(
 
 @Composable
 private fun ConsultationCard(consultation: Consultation, prescriptions: List<PrescriptionModel>) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(16.dp)) {
             Text(consultation.createdAt.take(10).ifBlank { "Consultation" }, fontWeight = FontWeight.Bold, color = TextPrimary)
             Text(consultation.status.ifBlank { "COMPLETED" }, color = TextSecondary, fontSize = 12.sp)

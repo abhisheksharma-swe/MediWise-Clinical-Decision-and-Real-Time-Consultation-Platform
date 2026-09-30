@@ -11,10 +11,9 @@ import java.math.BigDecimal;
  * Intended for an admin dashboard showing high-level health metrics.
  * All counts are computed via DB aggregate queries — not in-memory.
  *
- * INTERVIEW NOTE: We use repository count queries here, not a
- * separate analytics database, because the volumes are small enough
- * that a few COUNT(*) queries are cheap. At scale, these would be
- * pre-computed by a scheduled job and stored in Redis.
+ * Uses repository count queries directly rather than a separate analytics
+ * store, since current volumes make a few COUNT(*) queries cheap. At scale,
+ * these should be pre-computed by a scheduled job and cached in Redis.
  */
 @Data
 @Builder
@@ -24,7 +23,7 @@ public class AdminStatsResponse {
     private long totalUsers;
     private long totalPatients;
     private long totalDoctors;
-    private long pendingDoctorVerifications;  // doctors waiting for admin approval
+    private long pendingDoctorVerifications; 
     private long activeUsers;                 // users with active=true
 
     // ── Appointment metrics ───────────────────────────────────────────────

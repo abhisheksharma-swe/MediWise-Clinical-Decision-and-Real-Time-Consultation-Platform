@@ -3,6 +3,8 @@ package com.mediwise.auth.controller;
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
 import com.mediwise.auth.service.AuthService;
+import com.mediwise.chat.util.ChatRateLimiter;
+import com.mediwise.common.handler.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,11 +18,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,6 +42,9 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private ChatRateLimiter rateLimiter;
+
     @InjectMocks
     private AuthController authController;
 
@@ -43,7 +52,28 @@ class AuthControllerTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        mockMvc = MockMvcBuilders.standaloneSetup(authController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(authController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+        lenient().when(rateLimiter.allow(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/auth/login returns 429 once the rate limit is exceeded")
+    void testLoginEndpoint_rateLimited() throws Exception {
+        when(rateLimiter.allow(anyString(), anyInt(), any(Duration.class))).thenReturn(false);
+
+        LoginRequest request = LoginRequest.builder()
+                .emailOrPhone("jane@mediwise.com")
+                .password("securePassword123")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"));
     }
 
     @Test

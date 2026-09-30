@@ -7,8 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -271,7 +273,7 @@ fun EditProfileScreen(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.patientEditContent(
+private fun LazyListScope.patientEditContent(
     fullName: String, onFullNameChange: (String) -> Unit,
     phone: String,
     dob: String, onDobChange: (String) -> Unit,
@@ -340,7 +342,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.patientEditContent(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.doctorEditContent(
+private fun LazyListScope.doctorEditContent(
     doctorName: String, onDoctorNameChange: (String) -> Unit,
     specialty: String, onSpecialtyChange: (String) -> Unit,
     experienceYears: String, onExperienceChange: (String) -> Unit,
@@ -464,7 +466,7 @@ private fun ProfileTextField(
         label = { Text(label) },
         placeholder = { Text(placeholder, color = TextSecondary) },
         leadingIcon = { Icon(icon, contentDescription = null, tint = PrimaryBlue) },
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = PrimaryBlue,

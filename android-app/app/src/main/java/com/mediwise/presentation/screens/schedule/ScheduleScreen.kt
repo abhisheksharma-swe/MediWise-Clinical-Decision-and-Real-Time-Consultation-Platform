@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mediwise.domain.model.SlotModel
 import com.mediwise.presentation.theme.*
 import java.time.LocalDate
 import java.time.YearMonth
@@ -52,7 +53,7 @@ fun ScheduleScreen(
         viewModel.loadDoctorName(doctorId)
     }
 
-    var selectedSlotModel by remember { mutableStateOf<com.mediwise.domain.model.SlotModel?>(null) }
+    var selectedSlotModel by remember { mutableStateOf<SlotModel?>(null) }
 
     Scaffold(
         topBar = {

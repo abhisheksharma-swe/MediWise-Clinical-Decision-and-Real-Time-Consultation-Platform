@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,7 +133,7 @@ fun ConsultationDetailScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
                     ) {
                         if (uiState.isSavingNotes) {
-                            CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
                             Text(if (uiState.notesSaved) "Saved — Update" else "Save Consultation Notes")
                         }
@@ -175,7 +176,7 @@ fun ConsultationDetailScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
                         ) {
                             if (uiState.isSavingPrescription) {
-                                CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
                                 Text(if (uiState.prescriptionSaved) "Prescription Saved" else "Save Prescription")
                             }
@@ -218,7 +219,7 @@ fun ConsultationDetailScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
                     ) {
                         if (uiState.isSavingFollowUp) {
-                            CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
                             Text(if (uiState.followUpSaved) "Follow-up Saved" else "Recommend Follow-up")
                         }
@@ -251,14 +252,14 @@ private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Un
     }
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlowRowSymptoms(symptoms: List<String>, onRemove: (Int) -> Unit) {
     if (symptoms.isEmpty()) {
         Text("No symptoms added yet", color = TextSecondary, fontSize = 13.sp)
         return
     }
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         symptoms.forEachIndexed { index, symptom ->
             AssistChip(
                 onClick = { onRemove(index) },

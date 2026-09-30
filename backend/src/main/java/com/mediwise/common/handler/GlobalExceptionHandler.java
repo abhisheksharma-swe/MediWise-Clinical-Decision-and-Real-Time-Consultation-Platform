@@ -2,12 +2,16 @@ package com.mediwise.common.handler;
 
 import com.mediwise.common.exception.*;
 import com.mediwise.common.response.ApiResponse;
+import com.mediwise.common.web.CorrelationIdFilter;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -15,7 +19,6 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestControllerAdvice
@@ -38,7 +41,7 @@ public class GlobalExceptionHandler {
     // ── 402 Payment Failed ──────────────────────────────────────────────────
     @ExceptionHandler(PaymentException.class)
     public ResponseEntity<ApiResponse<Void>> handlePayment(PaymentException ex) {
-        String correlationId = UUID.randomUUID().toString();
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         log.error("Payment error [{}]: {}", correlationId, ex.getMessage());
         return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
                 .body(ApiResponse.error("PAYMENT_FAILED", ex.getMessage(), correlationId));
@@ -56,6 +59,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleForbidden(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("FORBIDDEN", "You do not have permission to access this resource", null));
+    }
+
+    // ── 429 Too Many Requests ───────────────────────────────────────────────
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiResponse.error("RATE_LIMIT_EXCEEDED", ex.getMessage(), null));
     }
 
     // ── 400 Validation (DTO @Valid) ─────────────────────────────────────────
@@ -91,9 +101,9 @@ public class GlobalExceptionHandler {
     }
 
     // ── 405 Method Not Allowed ──────────────────────────────────────────────
-    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
-            org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+            HttpRequestMethodNotSupportedException ex) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
                 .body(ApiResponse.error(
                         "METHOD_NOT_ALLOWED", "HTTP method " + ex.getMethod()
@@ -102,9 +112,9 @@ public class GlobalExceptionHandler {
     }
 
     // ── 400 Bad Request / Unreadable Body ────────────────────────────────────
-    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(
-            org.springframework.http.converter.HttpMessageNotReadableException ex) {
+            HttpMessageNotReadableException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("MALFORMED_REQUEST",
                         "Malformed JSON request body: " + ex.getMostSpecificCause().getMessage(), null));
@@ -113,7 +123,7 @@ public class GlobalExceptionHandler {
     // ── 500 Unknown / Catch-All ─────────────────────────────────────────────
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnknown(Exception ex) {
-        String correlationId = UUID.randomUUID().toString();
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         log.error("Unhandled exception [correlationId={}]: {}", correlationId, ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error(

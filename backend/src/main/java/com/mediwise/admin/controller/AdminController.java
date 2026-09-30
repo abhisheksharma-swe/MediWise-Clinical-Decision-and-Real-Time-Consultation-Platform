@@ -2,6 +2,7 @@ package com.mediwise.admin.controller;
 
 import com.mediwise.admin.dto.AdminStatsResponse;
 import com.mediwise.admin.dto.DoctorApprovalRequest;
+import com.mediwise.admin.dto.UserRoleUpdateRequest;
 import com.mediwise.admin.dto.UserStatusUpdateRequest;
 import com.mediwise.admin.dto.UserSummaryResponse;
 import com.mediwise.admin.service.AdminService;
@@ -70,7 +71,7 @@ public class AdminController {
     @Operation(summary = "Admin only: Update user role (PATIENT / DOCTOR / ADMIN)")
     public ResponseEntity<ApiResponse<UserSummaryResponse>> updateUserRole(
             @PathVariable UUID id,
-            @Valid @RequestBody com.mediwise.admin.dto.UserRoleUpdateRequest request) {
+            @Valid @RequestBody UserRoleUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 adminService.updateUserRole(id, request.getRole()), "User role updated successfully"));
     }

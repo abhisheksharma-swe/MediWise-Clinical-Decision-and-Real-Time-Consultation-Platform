@@ -3,9 +3,11 @@ package com.mediwise.auth.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.mediwise.common.response.ApiResponse;
+import com.mediwise.common.web.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -33,7 +35,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
         ApiResponse<Void> apiResponse = ApiResponse.error(
                 "FORBIDDEN",
                 "You do not have the required permissions to perform this action.",
-                request.getHeader("X-Correlation-Id")
+                MDC.get(CorrelationIdFilter.MDC_KEY)
         );
 
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));

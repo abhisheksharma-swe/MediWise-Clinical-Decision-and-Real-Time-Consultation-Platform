@@ -1,16 +1,20 @@
 package com.mediwise.common.storage;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.HttpMethod;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.mediwise.common.exception.BusinessException;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Date;
@@ -21,6 +25,11 @@ import java.util.Date;
  * public URL (matching the bucket's public-read policy, see AwsConfig); new, genuinely sensitive
  * content (medical documents) should use {@link #generatePresignedUrl} instead so it is never
  * readable from a bare, unauthenticated URL.
+ *
+ * Uploads retry a handful of times on transient AWS SDK failures (network blips, throttling) —
+ * the file's bytes are read into memory once up front specifically so each retry attempt can
+ * open a fresh stream; retrying against an already-partially-consumed stream from a failed
+ * attempt would silently upload a truncated file.
  */
 @Slf4j
 @Service
@@ -34,6 +43,12 @@ public class S3StorageService {
 
     @Value("${application.aws.s3.base-url}")
     private String s3BaseUrl;
+
+    private final Retry uploadRetry = Retry.of("s3-upload", RetryConfig.custom()
+            .maxAttempts(3)
+            .waitDuration(Duration.ofMillis(300))
+            .retryExceptions(AmazonClientException.class)
+            .build());
 
     /** Uploads a file to `key` and returns its permanently public URL. */
     public String uploadPublic(String key, MultipartFile file) {
@@ -56,12 +71,23 @@ public class S3StorageService {
     }
 
     private void putObject(String key, MultipartFile file) {
+        byte[] bytes;
         try {
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(file.getContentType());
-            metadata.setContentLength(file.getSize());
-            amazonS3.putObject(bucket, key, file.getInputStream(), metadata);
+            bytes = file.getBytes();
         } catch (IOException e) {
+            throw new BusinessException("UPLOAD_FAILED", "Failed to upload file: " + e.getMessage());
+        }
+
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentType(file.getContentType());
+        metadata.setContentLength(bytes.length);
+
+        try {
+            Retry.decorateRunnable(uploadRetry, () ->
+                    amazonS3.putObject(bucket, key, new ByteArrayInputStream(bytes), metadata)
+            ).run();
+        } catch (AmazonClientException e) {
+            log.error("S3 upload failed for key {} after retries: {}", key, e.getMessage());
             throw new BusinessException("UPLOAD_FAILED", "Failed to upload file: " + e.getMessage());
         }
     }

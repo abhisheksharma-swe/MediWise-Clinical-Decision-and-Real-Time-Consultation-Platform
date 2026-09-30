@@ -145,7 +145,7 @@ class PrescriptionServiceTest {
         Prescription prescription = Prescription.builder().id(UUID.randomUUID()).patientId(patientId).doctorId(doctorId).build();
         when(prescriptionRepository.findByPatientIdOrderByCreatedAtDesc(eq(patientId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(prescription)));
-        when(prescriptionItemRepository.findByPrescriptionIdOrderBySortOrderAsc(prescription.getId()))
+        when(prescriptionItemRepository.findByPrescriptionIdInOrderBySortOrderAsc(List.of(prescription.getId())))
                 .thenReturn(List.of());
 
         Page<PrescriptionResponse> page = prescriptionService.getForPatient(patientId, doctorUser, 0, 20);

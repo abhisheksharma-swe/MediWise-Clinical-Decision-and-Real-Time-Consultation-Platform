@@ -249,7 +249,7 @@ export default function Patients() {
           </select>
         </div>
         <p className="text-muted" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
-          Changing a user's role immediately changes what parts of the platform they can access.
+          Changing a user&apos;s role immediately changes what parts of the platform they can access.
         </p>
       </Modal>
 

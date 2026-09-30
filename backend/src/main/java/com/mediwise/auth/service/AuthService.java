@@ -2,6 +2,7 @@ package com.mediwise.auth.service;
 
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
+import com.mediwise.auth.otp.OtpDeliveryService;
 import com.mediwise.auth.repository.UserRepository;
 import com.mediwise.auth.security.FirebaseTokenVerifier;
 import com.mediwise.common.exception.BusinessException;
@@ -38,6 +39,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final PatientProfileRepository patientProfileRepository;
     private final DoctorRepository doctorRepository;
+    private final OtpDeliveryService otpDeliveryService;
 
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
@@ -273,9 +275,7 @@ public class AuthService {
         redisTemplate.opsForValue().set(otpKey, otp, Duration.ofMinutes(OTP_VALIDITY_MINUTES));
         redisTemplate.delete(attemptsKey);
 
-        // TODO: deliver `otp` via email/SMS once a provider is wired up.
-        // Logged server-side for now so the flow is testable end-to-end locally.
-        log.info("Password reset OTP generated for user: {} (valid {} min)", user.getEmail(), OTP_VALIDITY_MINUTES);
+        otpDeliveryService.deliverPasswordResetOtp(user, otp, OTP_VALIDITY_MINUTES);
     }
 
     @Transactional

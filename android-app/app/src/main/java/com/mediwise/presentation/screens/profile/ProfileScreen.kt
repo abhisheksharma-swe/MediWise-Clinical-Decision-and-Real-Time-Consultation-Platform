@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -296,7 +297,7 @@ fun ProfileScreen(
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.patientProfileContent(
+private fun LazyListScope.patientProfileContent(
     uiState: ProfileUiState,
     context: android.content.Context,
     onEditClick: () -> Unit,
@@ -416,7 +417,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.patientProfileContent
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.doctorProfileContent(
+private fun LazyListScope.doctorProfileContent(
     uiState: ProfileUiState,
     onNotificationsClick: () -> Unit,
     onSettingsClick: () -> Unit

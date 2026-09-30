@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
@@ -34,7 +35,7 @@ public class JwtUtil {
         try {
             keyBytes = Decoders.BASE64.decode(secret);
         } catch (Exception e) {
-            keyBytes = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         }
         if (keyBytes.length < 32) {
             throw new IllegalStateException(

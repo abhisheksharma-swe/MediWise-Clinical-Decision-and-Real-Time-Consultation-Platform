@@ -25,6 +25,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
 import java.time.Duration;
@@ -119,7 +120,7 @@ public class ChatController {
     public ResponseEntity<ApiResponse<ChatMediaUploadResponse>> uploadMedia(
             @PathVariable String roomId,
             @AuthenticationPrincipal User user,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+            @RequestParam("file") MultipartFile file) {
 
         if (!isRoomParticipant(roomId, user.getId().toString())) {
             throw new BusinessException("FORBIDDEN", "You do not have access to this chat room.");

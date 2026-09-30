@@ -3,6 +3,7 @@ package com.mediwise.core.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,12 +28,12 @@ class SessionDataStore @Inject constructor(
         val USER_ID = stringPreferencesKey("user_id")
         val USER_ROLE = stringPreferencesKey("user_role")
         val USER_EMAIL = stringPreferencesKey("user_email")
-        val PUSH_NOTIF = androidx.datastore.preferences.core.booleanPreferencesKey("push_notif")
-        val APPT_REMINDER = androidx.datastore.preferences.core.booleanPreferencesKey("appt_reminder")
-        val CHAT_NOTIF = androidx.datastore.preferences.core.booleanPreferencesKey("chat_notif")
-        val MARKETING_EMAIL = androidx.datastore.preferences.core.booleanPreferencesKey("marketing_email")
-        val BIOMETRIC = androidx.datastore.preferences.core.booleanPreferencesKey("biometric")
-        val DARK_THEME = androidx.datastore.preferences.core.booleanPreferencesKey("dark_theme")
+        val PUSH_NOTIF = booleanPreferencesKey("push_notif")
+        val APPT_REMINDER = booleanPreferencesKey("appt_reminder")
+        val CHAT_NOTIF = booleanPreferencesKey("chat_notif")
+        val MARKETING_EMAIL = booleanPreferencesKey("marketing_email")
+        val BIOMETRIC = booleanPreferencesKey("biometric")
+        val DARK_THEME = booleanPreferencesKey("dark_theme")
         val DEVICE_ID = stringPreferencesKey("device_id")
         val PENDING_FCM_TOKEN = stringPreferencesKey("pending_fcm_token")
         val REGISTERED_FCM_TOKEN = stringPreferencesKey("registered_fcm_token")
