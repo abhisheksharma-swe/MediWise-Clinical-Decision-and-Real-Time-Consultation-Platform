@@ -103,5 +103,5 @@ logs/
 *.sql.gz
 
 # Local planning docs (not for commit)
-docs/MEDIWISE_IMPLEMENTATION_PLAN.md
+docs/
 
