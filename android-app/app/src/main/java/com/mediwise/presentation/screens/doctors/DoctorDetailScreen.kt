@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -289,15 +290,22 @@ fun DoctorDetailScreen(
                     // Reviews section
                     item {
                         SectionCard(title = "Patient Reviews (${doctor.totalReviews.takeIf { it > 0 } ?: doctor.reviewCount})") {
-                            val sampleReviews = listOf(
-                                Triple("Priya Sharma", 5, "Dr. ${doctor.fullName} is extremely patient and explains the diagnosis thoroughly. Highly recommended!"),
-                                Triple("Rahul Verma", 5, "Very attentive and professional consultation. The prescribed treatment helped quickly."),
-                                Triple("Ananya Sengupta", 4, "Clear explanations and friendly attitude. Smooth appointment experience.")
-                            )
-                            sampleReviews.forEachIndexed { index, (name, rating, comment) ->
-                                ReviewItem(name = name, rating = rating, comment = comment)
-                                if (index < sampleReviews.size - 1) {
-                                    HorizontalDivider(color = Divider, modifier = Modifier.padding(vertical = 10.dp))
+                            if (uiState.reviews.isEmpty()) {
+                                Text(
+                                    "No reviews yet",
+                                    fontSize = 13.sp,
+                                    color = TextSecondary
+                                )
+                            } else {
+                                uiState.reviews.forEachIndexed { index, review ->
+                                    ReviewItem(
+                                        name = review.patientName.ifBlank { "Patient" },
+                                        rating = review.rating,
+                                        comment = review.reviewText
+                                    )
+                                    if (index < uiState.reviews.size - 1) {
+                                        HorizontalDivider(color = Divider, modifier = Modifier.padding(vertical = 10.dp))
+                                    }
                                 }
                             }
                         }
@@ -314,7 +322,7 @@ fun DoctorDetailScreen(
 private fun StatCard(
     value: String,
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     color: Color,
     modifier: Modifier = Modifier
 ) {

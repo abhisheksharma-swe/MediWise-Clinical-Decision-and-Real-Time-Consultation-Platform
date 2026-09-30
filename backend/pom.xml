@@ -59,6 +59,20 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Backs the /actuator/prometheus endpoint already exposed in application.yml —
+             without this on the classpath, that endpoint doesn't exist despite the config. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <!-- Core module only (not the Spring Boot starter/annotations) — used programmatically
+             in S3StorageService so retry behavior is plain Java, unit-testable with Mockito
+             without needing a Spring context to prove the AOP annotations actually fire. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+            <version>2.2.0</version>
+        </dependency>
 
         <!-- Database -->
         <dependency>
@@ -241,6 +255,29 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+            </plugin>
+            <!-- Coverage measurement only — no enforced threshold yet, so this can't fail a build.
+                 Publishes target/site/jacoco/index.html; a minimum-coverage gate can be added once
+                 the current baseline is visible and the team agrees on a number. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

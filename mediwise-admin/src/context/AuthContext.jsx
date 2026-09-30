@@ -50,7 +50,9 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     try {
       await logoutService()
-    } catch (ignored) {}
+    } catch {
+      // Best-effort server-side invalidation — local session is cleared below regardless.
+    }
     setToken(null)
     setUser(null)
   }, [])

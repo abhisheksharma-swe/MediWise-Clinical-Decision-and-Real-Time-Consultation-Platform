@@ -49,7 +49,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, null, null);
+        recordStatusChange(appt, null, null);
         notifyPatient(appt, "Appointment Scheduled",
                 "Your appointment has been scheduled successfully.", "APPOINTMENT_BOOKED");
         notifyDoctor(appt, "New Appointment Request",
@@ -62,7 +62,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, null, null);
+        recordStatusChange(appt, null, null);
         notifyPatient(appt, "Appointment Confirmed",
                 "Your payment was received and your appointment is confirmed.", "APPOINTMENT_CONFIRMED");
         notifyDoctor(appt, "Appointment Confirmed",
@@ -75,7 +75,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, event.getCancelledBy(), appt.getCancelReason());
+        recordStatusChange(appt, event.getCancelledBy(), appt.getCancelReason());
         notifyPatient(appt, "Appointment Cancelled",
                 "Your appointment has been cancelled.", "APPOINTMENT_CANCELLED");
         notifyDoctor(appt, "Appointment Cancelled",
@@ -88,7 +88,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, null, null);
+        recordStatusChange(appt, null, null);
         notifyPatient(appt, "Consultation Started",
                 "Your doctor has started the consultation. Join now.", "APPOINTMENT_STARTED");
     }
@@ -99,7 +99,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, null, null);
+        recordStatusChange(appt, null, null);
         notifyPatient(appt, "Consultation Completed",
                 "Your consultation notes are ready to view.", "APPOINTMENT_COMPLETED");
     }
@@ -110,7 +110,7 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, null, null, null);
+        recordStatusChange(appt, null, null);
         notifyPatient(appt, "Missed Appointment",
                 "You missed your scheduled appointment.", "APPOINTMENT_NO_SHOW");
     }
@@ -121,15 +121,23 @@ public class AppointmentEventListener {
         Appointment appt = event.getAppointment();
         if (appt == null) return;
 
-        recordStatusChange(appt, "RESCHEDULED", null, null);
+        // The appointment's status field itself doesn't change on reschedule (it stays
+        // CONFIRMED, only the slot moves), so "RESCHEDULED" is recorded as the new_status
+        // to mark the event in the audit trail, not as a real status the appointment sits in.
+        String currentStatus = appt.getStatus() != null ? appt.getStatus().name() : null;
+        recordStatusChange(appt, "RESCHEDULED", currentStatus, null, null);
     }
 
-    private void recordStatusChange(Appointment appt, String oldStatusOverride, UUID changedBy, String reason) {
+    private void recordStatusChange(Appointment appt, UUID changedBy, String reason) {
+        recordStatusChange(appt, appt.getStatus() != null ? appt.getStatus().name() : null, null, changedBy, reason);
+    }
+
+    private void recordStatusChange(Appointment appt, String newStatus, String oldStatus, UUID changedBy, String reason) {
         try {
             AppointmentStatusHistory history = AppointmentStatusHistory.builder()
                     .appointmentId(appt.getId())
-                    .oldStatus(oldStatusOverride)
-                    .newStatus(appt.getStatus() != null ? appt.getStatus().name() : null)
+                    .oldStatus(oldStatus)
+                    .newStatus(newStatus)
                     .changedBy(changedBy)
                     .reason(reason)
                     .build();

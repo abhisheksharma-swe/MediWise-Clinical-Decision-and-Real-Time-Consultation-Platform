@@ -1,5 +1,6 @@
 package com.mediwise.data.remote.dto
 
+import com.mediwise.domain.model.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -326,7 +327,7 @@ data class AiReportDto(
     val createdAt: String? = null
 )
 
-fun DoctorDto.toDomain() = com.mediwise.domain.model.Doctor(
+fun DoctorDto.toDomain() = Doctor(
     id = id,
     fullName = fullName,
     specialty = specialty,
@@ -344,7 +345,7 @@ fun DoctorDto.toDomain() = com.mediwise.domain.model.Doctor(
     consultationModes = consultationModes.ifEmpty { listOf("ONLINE") }
 )
 
-fun AppointmentDto.toDomain() = com.mediwise.domain.model.Appointment(
+fun AppointmentDto.toDomain() = Appointment(
     id = id,
     patientId = patientId,
     doctorId = doctorId,
@@ -361,7 +362,7 @@ fun AppointmentDto.toDomain() = com.mediwise.domain.model.Appointment(
     doctorUserId = doctorUserId ?: ""
 )
 
-fun SlotDto.toDomain() = com.mediwise.domain.model.SlotModel(
+fun SlotDto.toDomain() = SlotModel(
     id = id,
     doctorId = doctorId ?: "",
     date = slotDate,
@@ -370,15 +371,15 @@ fun SlotDto.toDomain() = com.mediwise.domain.model.SlotModel(
     status = status
 )
 
-fun AuthResponseDto.toDomain() = com.mediwise.domain.model.AuthResult(accessToken = accessToken, refreshToken = refreshToken, user = user.toDomain())
-fun UserInfoDto.toDomain() = com.mediwise.domain.model.User(id = id, email = email, role = role)
-fun PaymentDto.toDomain() = com.mediwise.domain.model.Payment(
+fun AuthResponseDto.toDomain() = AuthResult(accessToken = accessToken, refreshToken = refreshToken, user = user.toDomain())
+fun UserInfoDto.toDomain() = User(id = id, email = email, role = role)
+fun PaymentDto.toDomain() = Payment(
     id = id,
     appointmentId = appointmentId,
     amount = amount?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "0",
     status = status
 )
-fun ConsultationDto.toDomain() = com.mediwise.domain.model.Consultation(
+fun ConsultationDto.toDomain() = Consultation(
     id = id,
     appointmentId = appointmentId,
     patientId = patientId,
@@ -392,7 +393,7 @@ fun ConsultationDto.toDomain() = com.mediwise.domain.model.Consultation(
     status = status ?: "",
     createdAt = createdAt ?: ""
 )
-fun PrescriptionItemDto.toDomain() = com.mediwise.domain.model.PrescriptionItemModel(
+fun PrescriptionItemDto.toDomain() = PrescriptionItemModel(
     id = id ?: "",
     medicineName = medicineName,
     dosage = dosage ?: "",
@@ -401,42 +402,42 @@ fun PrescriptionItemDto.toDomain() = com.mediwise.domain.model.PrescriptionItemM
     instructions = instructions ?: "",
     beforeAfterFood = beforeAfterFood ?: ""
 )
-fun PrescriptionDto.toDomain() = com.mediwise.domain.model.PrescriptionModel(
+fun PrescriptionDto.toDomain() = PrescriptionModel(
     id = id,
     consultationId = consultationId,
     notes = notes ?: "",
     items = items.map { it.toDomain() },
     createdAt = createdAt ?: ""
 )
-fun ConditionDto.toDomain() = com.mediwise.domain.model.Condition(
+fun ConditionDto.toDomain() = Condition(
     id = id, name = name, diagnosedDate = diagnosedDate ?: "",
     status = status ?: "ACTIVE", notes = notes ?: "", selfReported = selfReported
 )
-fun AllergyDto.toDomain() = com.mediwise.domain.model.Allergy(
+fun AllergyDto.toDomain() = Allergy(
     id = id, allergen = allergen, reaction = reaction ?: "",
     severity = severity ?: "", notes = notes ?: "", selfReported = selfReported
 )
-fun MedicationDto.toDomain() = com.mediwise.domain.model.Medication(
+fun MedicationDto.toDomain() = Medication(
     id = id, name = name, dosage = dosage ?: "", frequency = frequency ?: "",
     startDate = startDate ?: "", endDate = endDate ?: "", active = active, selfReported = selfReported
 )
-fun MedicalRecordDto.toDomain() = com.mediwise.domain.model.MedicalRecord(
+fun MedicalRecordDto.toDomain() = MedicalRecord(
     patientId = patientId,
     conditions = conditions.map { it.toDomain() },
     allergies = allergies.map { it.toDomain() },
     medications = medications.map { it.toDomain() }
 )
-fun FollowUpDto.toDomain() = com.mediwise.domain.model.FollowUp(
+fun FollowUpDto.toDomain() = FollowUp(
     id = id, consultationId = consultationId, patientId = patientId, doctorId = doctorId,
     recommendedDate = recommendedDate ?: "", reason = reason ?: "", status = status,
     linkedAppointmentId = linkedAppointmentId ?: ""
 )
-fun MedicalDocumentDto.toDomain() = com.mediwise.domain.model.MedicalDocument(
+fun MedicalDocumentDto.toDomain() = MedicalDocument(
     id = id, patientId = patientId, documentType = documentType,
     originalFilename = originalFilename ?: "", contentType = contentType ?: "", sizeBytes = sizeBytes ?: 0,
     url = url ?: "", uploadedAt = uploadedAt ?: ""
 )
-fun ReviewDto.toDomain() = com.mediwise.domain.model.Review(
+fun ReviewDto.toDomain() = Review(
     id = id,
     appointmentId = appointmentId,
     doctorId = doctorId,
@@ -445,8 +446,8 @@ fun ReviewDto.toDomain() = com.mediwise.domain.model.Review(
     reviewText = reviewText ?: "",
     createdAt = createdAt ?: ""
 )
-fun ProfileDto.toDomain() = com.mediwise.domain.model.UserProfile(fullName = fullName ?: "", dob = dob ?: "", bloodType = bloodType ?: "", gender = gender ?: "", profileImage = profileImage)
-fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = com.mediwise.domain.model.PatientProfile(
+fun ProfileDto.toDomain() = UserProfile(fullName = fullName ?: "", dob = dob ?: "", bloodType = bloodType ?: "", gender = gender ?: "", profileImage = profileImage)
+fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = PatientProfile(
     id = id ?: "",
     fullName = fullName ?: "",
     email = email,
@@ -459,7 +460,7 @@ fun ProfileDto.toPatientProfile(email: String = "", phone: String = "") = com.me
     profileImageUrl = profileImage
 )
 
-fun AiReportDto.toDomain() = com.mediwise.domain.model.AiTriageReport(
+fun AiReportDto.toDomain() = AiTriageReport(
     id = id ?: "",
     patientId = patientId ?: "",
     appointmentId = appointmentId,
@@ -471,14 +472,14 @@ fun AiReportDto.toDomain() = com.mediwise.domain.model.AiTriageReport(
     matchedDoctors = matchedDoctors.map { it.toDomain() },
     createdAt = createdAt ?: ""
 )
-fun NotificationDto.toDomain() = com.mediwise.domain.model.Notification(id = id, title = title, body = body ?: "", type = type, isRead = read, time = sentAt ?: "")
-fun ChatMessageDto.toDomain() = com.mediwise.domain.model.ChatMessage(
+fun NotificationDto.toDomain() = Notification(id = id, title = title, body = body ?: "", type = type, isRead = read, time = sentAt ?: "")
+fun ChatMessageDto.toDomain() = ChatMessage(
     id = id ?: "",
     senderId = senderId,
     content = content,
     time = sentAt ?: "",
     isMe = false,
-    contentType = com.mediwise.domain.model.ChatContentType.entries.firstOrNull { it.name == contentType } ?: com.mediwise.domain.model.ChatContentType.TEXT,
+    contentType = ChatContentType.entries.firstOrNull { it.name == contentType } ?: ChatContentType.TEXT,
     mediaUrl = mediaUrl
 )
 

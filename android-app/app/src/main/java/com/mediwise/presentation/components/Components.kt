@@ -14,6 +14,9 @@ import androidx.compose.ui.unit.dp
 import com.mediwise.presentation.theme.*
 import com.mediwise.domain.model.Doctor
 import com.mediwise.domain.model.Appointment
+import com.mediwise.domain.model.FollowUp
+import com.mediwise.domain.model.Role
+import com.mediwise.presentation.navigation.Screen
 import com.mediwise.presentation.navigation.navigateToMainTab
 
 import androidx.compose.foundation.shape.CircleShape
@@ -27,8 +30,11 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VideoCall
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 
 // ── MediWise Pill Button (Primary) ──────────────────────────────────────────
@@ -100,8 +106,8 @@ fun MediWiseInputField(
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
-    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     isError: Boolean = false,
     errorMessage: String? = null,
     singleLine: Boolean = true
@@ -279,7 +285,7 @@ fun AppTextField(
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     isError: Boolean = false,
     errorMessage: String? = null,
     singleLine: Boolean = true
@@ -408,7 +414,7 @@ fun QuickActionCard(action: QuickActionItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
                 color = TextPrimary
             )
         }
@@ -484,7 +490,7 @@ fun AppointmentSummaryCard(appt: Appointment, modifier: Modifier = Modifier, onJ
 
 // ── Follow-up Summary Card ──────────────────────────────────────────────────
 @Composable
-fun FollowUpSummaryCard(followUp: com.mediwise.domain.model.FollowUp, modifier: Modifier = Modifier, onBookNowClick: () -> Unit) {
+fun FollowUpSummaryCard(followUp: FollowUp, modifier: Modifier = Modifier, onBookNowClick: () -> Unit) {
     AppCard(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -531,24 +537,24 @@ private data class BottomTab(val label: String, val icon: ImageVector, val route
 fun ClinicalBottomBar(
     navController: androidx.navigation.NavController,
     currentRoute: String,
-    role: com.mediwise.domain.model.Role? = null,
+    role: Role? = null,
     onTabReselected: (String) -> Unit = {}
 ) {
     // Browsing/booking other doctors is a patient-only concept; a doctor's equivalent
     // primary action is managing their own schedule, which already exists as a fully
     // separate, correct screen (DoctorScheduleScreen) rather than duplicated here.
-    val items = if (role == com.mediwise.domain.model.Role.DOCTOR) {
+    val items = if (role == Role.DOCTOR) {
         listOf(
-            BottomTab("Home", Icons.Default.Home, com.mediwise.presentation.navigation.Screen.Home.route),
-            BottomTab("Schedule", Icons.Default.CalendarMonth, com.mediwise.presentation.navigation.Screen.DoctorSchedule.route),
-            BottomTab("Profile", Icons.Default.Person, com.mediwise.presentation.navigation.Screen.Profile.route)
+            BottomTab("Home", Icons.Default.Home, Screen.Home.route),
+            BottomTab("Schedule", Icons.Default.CalendarMonth, Screen.DoctorSchedule.route),
+            BottomTab("Profile", Icons.Default.Person, Screen.Profile.route)
         )
     } else {
         listOf(
-            BottomTab("Home", Icons.Default.Home, com.mediwise.presentation.navigation.Screen.Home.route),
-            BottomTab("Doctors", Icons.Default.MedicalServices, com.mediwise.presentation.navigation.Screen.DoctorList.route),
-            BottomTab("Appointment", Icons.Default.CalendarMonth, com.mediwise.presentation.navigation.Screen.Appointments.route),
-            BottomTab("Profile", Icons.Default.Person, com.mediwise.presentation.navigation.Screen.Profile.route)
+            BottomTab("Home", Icons.Default.Home, Screen.Home.route),
+            BottomTab("Doctors", Icons.Default.MedicalServices, Screen.DoctorList.route),
+            BottomTab("Appointment", Icons.Default.CalendarMonth, Screen.Appointments.route),
+            BottomTab("Profile", Icons.Default.Person, Screen.Profile.route)
         )
     }
 

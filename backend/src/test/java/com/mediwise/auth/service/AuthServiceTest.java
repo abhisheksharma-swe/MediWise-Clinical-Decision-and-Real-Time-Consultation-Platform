@@ -2,6 +2,7 @@ package com.mediwise.auth.service;
 
 import com.mediwise.auth.dto.*;
 import com.mediwise.auth.model.User;
+import com.mediwise.auth.otp.OtpDeliveryService;
 import com.mediwise.auth.repository.UserRepository;
 import com.mediwise.auth.security.FirebaseTokenVerifier;
 import com.google.firebase.auth.FirebaseToken;
@@ -50,6 +51,9 @@ class AuthServiceTest {
 
     @Mock
     private com.mediwise.doctor.repository.DoctorRepository doctorRepository;
+
+    @Mock
+    private OtpDeliveryService otpDeliveryService;
 
     @Mock
     private RedisTemplate<String, Object> redisTemplate;
@@ -302,6 +306,37 @@ class AuthServiceTest {
 
         verify(userRepository).save(sampleUser);
         assertEquals("hashedNewSecret456", sampleUser.getPasswordHash());
+    }
+
+    @Test
+    @DisplayName("Should generate an OTP, store it in Redis, and deliver it via OtpDeliveryService")
+    void testForgotPasswordSuccess() {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .emailOrPhone("test@mediwise.com")
+                .build();
+
+        when(userRepository.findByIdentifier("test@mediwise.com")).thenReturn(Optional.of(sampleUser));
+
+        authService.forgotPassword(request);
+
+        verify(valueOperations).set(eq("pwreset:otp:test@mediwise.com"), anyString(), any());
+        verify(redisTemplate).delete("pwreset:attempts:test@mediwise.com");
+        verify(otpDeliveryService).deliverPasswordResetOtp(eq(sampleUser), anyString(), eq(10L));
+    }
+
+    @Test
+    @DisplayName("Should not deliver an OTP or reveal whether the account exists for an unknown identifier")
+    void testForgotPassword_unknownIdentifier_noOtpDelivered() {
+        ForgotPasswordRequest request = ForgotPasswordRequest.builder()
+                .emailOrPhone("nobody@mediwise.com")
+                .build();
+
+        when(userRepository.findByIdentifier("nobody@mediwise.com")).thenReturn(Optional.empty());
+
+        authService.forgotPassword(request);
+
+        verifyNoInteractions(otpDeliveryService);
+        verify(valueOperations, never()).set(anyString(), any(), any());
     }
 
     @Test

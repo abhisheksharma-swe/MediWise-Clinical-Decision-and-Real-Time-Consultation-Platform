@@ -1,6 +1,7 @@
 package com.mediwise.presentation.screens.appointment
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -8,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +71,7 @@ fun AppointmentReviewScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = androidx.compose.foundation.shape.CircleShape,
+                        shape = CircleShape,
                         color = PrimaryBlueLight,
                         modifier = Modifier.size(48.dp)
                     ) {
@@ -162,7 +164,7 @@ fun AppointmentReviewScreen(
             ) {
                 if (uiState.isSubmitting) {
                     CircularProgressIndicator(
-                        color = androidx.compose.ui.graphics.Color.White,
+                        color = Color.White,
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )

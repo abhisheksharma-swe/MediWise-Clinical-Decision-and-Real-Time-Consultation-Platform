@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -340,7 +341,7 @@ fun ChatScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                             modifier = Modifier.fillMaxWidth().padding(top = 2.dp, end = 4.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.End
+                            textAlign = TextAlign.End
                         )
                     }
                 }

@@ -5,6 +5,7 @@ import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +28,7 @@ public class JwtSecretProvider {
 
     public JwtSecretProvider(
             ObjectMapper objectMapper,
-            org.springframework.beans.factory.ObjectProvider<AWSSecretsManager> secretsManagerProvider) {
+            ObjectProvider<AWSSecretsManager> secretsManagerProvider) {
         this.objectMapper = objectMapper;
         this.secretsManager = secretsManagerProvider.getIfAvailable();
     }

@@ -8,6 +8,7 @@ import com.mediwise.data.remote.dto.LoginRequestDto
 import com.mediwise.data.remote.dto.RegisterRequestDto
 import com.mediwise.domain.repository.AuthRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthCredential
 import com.mediwise.data.remote.dto.AppConfigDto
 import com.mediwise.data.remote.dto.ChangePasswordRequestDto
 import com.mediwise.data.remote.dto.ForgotPasswordRequestDto
@@ -59,7 +60,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun loginWithPhoneCredential(credential: com.google.firebase.auth.PhoneAuthCredential): Result<Unit> {
+    override suspend fun loginWithPhoneCredential(credential: PhoneAuthCredential): Result<Unit> {
         return safeApiCall {
             val firebaseUser = firebaseAuth.signInWithCredential(credential).await().user
                 ?: throw Exception("Firebase user was not returned")

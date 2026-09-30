@@ -13,6 +13,7 @@ import com.mediwise.doctor.model.Doctor;
 import com.mediwise.doctor.repository.DoctorRepository;
 import com.mediwise.payment.model.Payment;
 import com.mediwise.payment.repository.PaymentRepository;
+import com.mediwise.profile.model.PatientProfile;
 import com.mediwise.profile.repository.PatientProfileRepository;
 import com.mediwise.schedule.model.TimeSlot;
 import com.mediwise.schedule.repository.TimeSlotRepository;
@@ -241,7 +242,7 @@ public class AdminService {
         UUID patientUserId = patientProfileRepository.findById(appointment.getPatientId())
                 .map(p -> p.getUserId()).orElse(null);
         String patientName = patientProfileRepository.findById(appointment.getPatientId())
-            .map(com.mediwise.profile.model.PatientProfile::getFullName).orElse(null);
+            .map(PatientProfile::getFullName).orElse(null);
         return AppointmentResponse.from(appointment, slot, docName, docSpecialty, docImage, doctorUserId, patientUserId, patientName);
     }
 }

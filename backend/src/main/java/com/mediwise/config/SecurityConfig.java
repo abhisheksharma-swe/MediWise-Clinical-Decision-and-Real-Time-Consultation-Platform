@@ -3,6 +3,7 @@ package com.mediwise.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mediwise.auth.security.JwtAuthFilter;
 import com.mediwise.common.response.ApiResponse;
+import com.mediwise.common.web.CorrelationIdFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -33,10 +34,13 @@ public class SecurityConfig {
 
     private JwtAuthFilter jwtAuthFilter;
     private final ObjectMapper objectMapper;
+    private final CorrelationIdFilter correlationIdFilter;
 
-    public SecurityConfig(@Autowired(required = false) JwtAuthFilter jwtAuthFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(@Autowired(required = false) JwtAuthFilter jwtAuthFilter, ObjectMapper objectMapper,
+                           CorrelationIdFilter correlationIdFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.objectMapper = objectMapper;
+        this.correlationIdFilter = correlationIdFilter;
     }
 
     @Value("${application.cors.allowed-origins}")
@@ -61,11 +65,6 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Without this, a missing/expired token is treated as "authenticated
-                // as anonymous with insufficient role" and Spring Security reports it
-                // as 403 (AccessDeniedHandler) instead of 401 (AuthenticationEntryPoint
-                // below) — which breaks the app's OkHttp Authenticator, since OkHttp
-                // only triggers token-refresh-and-retry on a 401 response, never on 403.
                 // Without this, a missing/expired token is treated as "authenticated
                 // as anonymous with insufficient role" and Spring Security reports it
                 // as 403 (AccessDeniedHandler) instead of 401 (AuthenticationEntryPoint
@@ -99,9 +98,12 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 );
 
-        // 👇 ADD FILTER ONLY IF AVAILABLE
+        // Registered first so every log line for a request — including ones from
+        // JwtAuthFilter below — can be tied back to a single correlation ID.
+        http.addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter.class);
+
         if (jwtAuthFilter != null) {
-            http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            http.addFilterAfter(jwtAuthFilter, CorrelationIdFilter.class);
         }
 
         return http.build();

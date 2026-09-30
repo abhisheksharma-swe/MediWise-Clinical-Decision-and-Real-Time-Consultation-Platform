@@ -1,7 +1,6 @@
 package com.mediwise.payment.service;
 
 import com.razorpay.RazorpayException;
-import org.json.JSONObject;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -9,15 +8,10 @@ import java.util.UUID;
 /**
  * Adapter interface that wraps the Razorpay SDK's order creation.
  *
- * WHY THIS EXISTS:
  * The Razorpay SDK exposes sub-resources as public fields (client.orders),
- * not as injectable beans. You cannot @Mock a public field in unit tests.
- *
- * By introducing this interface, RazorpayService depends on an abstraction
- * (not the SDK directly), so unit tests can mock it cleanly.
- *
- * INTERVIEW POINT: This is the Adapter Pattern — wrapping a concrete
- * third-party dependency behind an interface you control.
+ * not as injectable beans, so a public field can't be mocked directly in unit
+ * tests. This interface lets RazorpayService depend on an abstraction instead
+ * of the SDK directly, so tests can mock it cleanly.
  */
 public interface RazorpayOrderGateway {
 

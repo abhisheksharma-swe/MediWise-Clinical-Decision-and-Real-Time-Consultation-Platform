@@ -162,7 +162,7 @@ class ReviewServiceTest {
                 .doctorId(doctorId).patientId(patientId).rating((short) 4).build();
         when(ratingRepository.findByDoctorIdOrderByCreatedAtDesc(eq(doctorId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(rating)));
-        when(patientProfileRepository.findById(patientId)).thenReturn(Optional.of(patientProfile));
+        when(patientProfileRepository.findAllById(List.of(patientId))).thenReturn(List.of(patientProfile));
 
         Page<ReviewResponse> page = reviewService.getForDoctor(doctorId, 0, 20);
 

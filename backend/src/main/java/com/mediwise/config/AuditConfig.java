@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import com.mediwise.auth.model.User;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -22,15 +23,11 @@ public class AuditConfig {
                     || "anonymousUser".equals(authentication.getPrincipal())) {
                 return Optional.empty();
             }
-            try {
-                // Principal is CustomUserDetails which exposes the user UUID
-                Object principal = authentication.getPrincipal();
-                if (principal instanceof org.springframework.security.core.userdetails.UserDetails ud) {
-                    // Username is stored as UUID string
-                    return Optional.of(UUID.fromString(ud.getUsername()));
-                }
-            } catch (Exception ignored) {
-                // If we can't parse, return empty — audit will have no actor
+            // JwtAuthFilter sets the authenticated principal to the User entity directly
+            // (not a UserDetails wrapper), so this checks for that concrete type.
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof User user) {
+                return Optional.of(user.getId());
             }
             return Optional.empty();
         };

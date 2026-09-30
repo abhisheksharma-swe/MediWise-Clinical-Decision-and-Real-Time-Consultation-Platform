@@ -2,6 +2,7 @@ package com.mediwise.analytics.service;
 
 import com.mediwise.analytics.dto.AppointmentAnalyticsResponse;
 import com.mediwise.analytics.dto.DashboardStatsResponse;
+import com.mediwise.appointment.model.Appointment;
 import com.mediwise.appointment.repository.AppointmentRepository;
 import com.mediwise.auth.model.User;
 import com.mediwise.common.exception.UnauthorizedException;
@@ -38,10 +39,10 @@ public class AnalyticsService {
     @Transactional(readOnly = true)
     public DashboardStatsResponse getDashboardStats() {
         long total       = appointmentRepository.count();
-        long pending     = appointmentRepository.countByStatus(com.mediwise.appointment.model.Appointment.AppointmentStatus.PENDING);
-        long confirmed   = appointmentRepository.countByStatus(com.mediwise.appointment.model.Appointment.AppointmentStatus.CONFIRMED);
-        long completed   = appointmentRepository.countByStatus(com.mediwise.appointment.model.Appointment.AppointmentStatus.COMPLETED);
-        long cancelled   = appointmentRepository.countByStatus(com.mediwise.appointment.model.Appointment.AppointmentStatus.CANCELLED);
+        long pending     = appointmentRepository.countByStatus(Appointment.AppointmentStatus.PENDING);
+        long confirmed   = appointmentRepository.countByStatus(Appointment.AppointmentStatus.CONFIRMED);
+        long completed   = appointmentRepository.countByStatus(Appointment.AppointmentStatus.COMPLETED);
+        long cancelled   = appointmentRepository.countByStatus(Appointment.AppointmentStatus.CANCELLED);
         long totalDocs   = doctorRepository.count();
         BigDecimal revenue = paymentRepository.sumSuccessfulPayments();
 
@@ -66,9 +67,9 @@ public class AnalyticsService {
         Instant endInst = to.atTime(LocalTime.MAX).atZone(ZoneId.systemDefault()).toInstant();
 
         long total     = appointmentRepository.countByDoctorIdAndCreatedAtBetween(doctorId, startInst, endInst);
-        long completed = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, com.mediwise.appointment.model.Appointment.AppointmentStatus.COMPLETED, startInst, endInst);
-        long cancelled = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, com.mediwise.appointment.model.Appointment.AppointmentStatus.CANCELLED, startInst, endInst);
-        long noShow    = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, com.mediwise.appointment.model.Appointment.AppointmentStatus.NO_SHOW, startInst, endInst);
+        long completed = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, Appointment.AppointmentStatus.COMPLETED, startInst, endInst);
+        long cancelled = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, Appointment.AppointmentStatus.CANCELLED, startInst, endInst);
+        long noShow    = appointmentRepository.countByDoctorIdAndStatusAndCreatedAtBetween(doctorId, Appointment.AppointmentStatus.NO_SHOW, startInst, endInst);
 
         BigDecimal revenue = paymentRepository.sumByDoctorIdAndDateRange(doctorId, startInst, endInst);
 

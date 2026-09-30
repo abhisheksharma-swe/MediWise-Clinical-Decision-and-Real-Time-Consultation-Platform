@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -152,10 +153,10 @@ private fun DoctorAppointmentCard(
                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text("Patient ID: ${appointment.patientId.take(8)}",
                         fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary,
-                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (appointment.chiefComplaint.isNotBlank()) {
                         Text(appointment.chiefComplaint, fontSize = 13.sp, color = TextSecondary,
-                            maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 StatusBadge(appointment.status)

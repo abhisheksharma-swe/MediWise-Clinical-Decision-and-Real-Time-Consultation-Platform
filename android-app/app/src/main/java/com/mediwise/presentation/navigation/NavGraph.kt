@@ -28,6 +28,9 @@ import com.mediwise.presentation.screens.doctors.*
 import com.mediwise.presentation.screens.schedule.ScheduleScreen
 import com.mediwise.presentation.screens.appointment.*
 import com.mediwise.presentation.screens.doctor.DoctorScheduleScreen
+import com.mediwise.presentation.screens.consultation.ConsultationDetailScreen
+import com.mediwise.presentation.screens.medicalrecord.MedicalRecordScreen
+import com.mediwise.presentation.screens.medicalrecord.MedicalDocumentsScreen
 import com.mediwise.presentation.screens.profile.*
 import com.mediwise.presentation.screens.notification.NotificationScreen
 import com.mediwise.presentation.screens.chat.ChatScreen
@@ -35,6 +38,7 @@ import com.mediwise.presentation.screens.chat.ConversationListScreen
 import com.mediwise.presentation.screens.call.CallScreen
 import com.mediwise.domain.model.CallDirection
 import com.mediwise.domain.model.CallMediaType
+import com.mediwise.domain.model.Role
 import com.mediwise.presentation.screens.payment.PaymentScreen
 import com.mediwise.presentation.screens.payment.PaymentSuccessScreen
 import com.mediwise.presentation.screens.welcome.WelcomeScreen
@@ -160,7 +164,7 @@ fun NavGraph(
                 Screen.Call.createRoute(
                     roomId = call.roomId,
                     otherPartyId = call.callerId,
-                    otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                    otherPartyName = if (role == Role.DOCTOR) "Patient" else "Doctor",
                     mediaType = call.mediaType.name,
                     direction = CallDirection.INCOMING.name
                 )
@@ -373,13 +377,13 @@ fun NavGraph(
                         navController.navigate(Screen.Schedule.createRoute(doctorId, id))
                     },
                     onConsultationClick = { id -> navController.navigate(Screen.ConsultationDetail.createRoute(id)) },
-                    isDoctor = role == com.mediwise.domain.model.Role.DOCTOR,
+                    isDoctor = role == Role.DOCTOR,
                     onAudioCallClick = { otherPartyId ->
                         navController.navigate(
                             Screen.Call.createRoute(
                                 roomId = "appointment_$appointmentId",
                                 otherPartyId = otherPartyId,
-                                otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                                otherPartyName = if (role == Role.DOCTOR) "Patient" else "Doctor",
                                 mediaType = CallMediaType.AUDIO.name,
                                 direction = CallDirection.OUTGOING.name
                             )
@@ -390,7 +394,7 @@ fun NavGraph(
                             Screen.Call.createRoute(
                                 roomId = "appointment_$appointmentId",
                                 otherPartyId = otherPartyId,
-                                otherPartyName = if (role == com.mediwise.domain.model.Role.DOCTOR) "Patient" else "Doctor",
+                                otherPartyName = if (role == Role.DOCTOR) "Patient" else "Doctor",
                                 mediaType = CallMediaType.VIDEO.name,
                                 direction = CallDirection.OUTGOING.name
                             )
@@ -410,7 +414,7 @@ fun NavGraph(
 
             composable(Screen.ConsultationDetail.route, arguments = listOf(navArgument("appointmentId") { type = NavType.StringType })) { backStackEntry ->
                 val appointmentId = backStackEntry.arguments?.getString("appointmentId") ?: ""
-                com.mediwise.presentation.screens.consultation.ConsultationDetailScreen(
+                ConsultationDetailScreen(
                     appointmentId = appointmentId,
                     onBackClick = { navController.navigateUp() }
                 )
@@ -421,7 +425,7 @@ fun NavGraph(
                 arguments = listOf(navArgument("patientId") { type = NavType.StringType; nullable = true; defaultValue = null })
             ) { backStackEntry ->
                 val patientId = backStackEntry.arguments?.getString("patientId")
-                com.mediwise.presentation.screens.medicalrecord.MedicalRecordScreen(
+                MedicalRecordScreen(
                     patientId = patientId,
                     onBackClick = { navController.navigateUp() }
                 )
@@ -432,7 +436,7 @@ fun NavGraph(
                 arguments = listOf(navArgument("patientId") { type = NavType.StringType; nullable = true; defaultValue = null })
             ) { backStackEntry ->
                 val patientId = backStackEntry.arguments?.getString("patientId")
-                com.mediwise.presentation.screens.medicalrecord.MedicalDocumentsScreen(
+                MedicalDocumentsScreen(
                     patientId = patientId,
                     onBackClick = { navController.navigateUp() }
                 )

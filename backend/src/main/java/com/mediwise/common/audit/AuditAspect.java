@@ -17,7 +17,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.UUID;
 
 /**
  * AOP aspect that wraps all @Service methods and writes audit entries to MongoDB.

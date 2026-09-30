@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface PrescriptionItemRepository extends JpaRepository<PrescriptionItem, UUID> {
 
     List<PrescriptionItem> findByPrescriptionIdOrderBySortOrderAsc(UUID prescriptionId);
+
+    List<PrescriptionItem> findByPrescriptionIdInOrderBySortOrderAsc(List<UUID> prescriptionIds);
 }

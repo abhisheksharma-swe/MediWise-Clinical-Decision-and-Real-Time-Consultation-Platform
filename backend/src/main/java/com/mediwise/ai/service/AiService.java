@@ -32,7 +32,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -209,11 +213,11 @@ public class AiService {
     }
 
     /** Never trusts client input — derived from the patient's own stored date of birth. */
-    private Integer resolvePatientAge(java.util.UUID patientId) {
+    private Integer resolvePatientAge(UUID patientId) {
         return patientProfileRepository.findById(patientId)
-                .map(com.mediwise.profile.model.PatientProfile::getDob)
-                .filter(java.util.Objects::nonNull)
-                .map(dob -> java.time.Period.between(dob, java.time.LocalDate.now()).getYears())
+                .map(PatientProfile::getDob)
+                .filter(Objects::nonNull)
+                .map(dob -> Period.between(dob, LocalDate.now()).getYears())
                 .orElse(null);
     }
 
@@ -345,7 +349,7 @@ public class AiService {
         String recommendation = json.optString("recommendation", "Please consult a doctor for further evaluation.");
         report.setRecommendation(recommendation + " This is an AI-generated suggestion and is not a substitute for professional medical advice.");
 
-        List<String> riskFactors = new java.util.ArrayList<>();
+        List<String> riskFactors = new ArrayList<>();
         JSONArray riskArray = json.optJSONArray("riskFactors");
         if (riskArray != null) {
             for (int i = 0; i < riskArray.length(); i++) {

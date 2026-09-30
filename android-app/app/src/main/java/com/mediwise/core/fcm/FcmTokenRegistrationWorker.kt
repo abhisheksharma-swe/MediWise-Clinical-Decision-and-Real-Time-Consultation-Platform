@@ -8,6 +8,7 @@ import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
 import com.mediwise.BuildConfig
 import com.mediwise.core.datastore.SessionDataStore
+import com.mediwise.core.result.Result
 import com.mediwise.domain.repository.NotificationRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -43,11 +44,11 @@ class FcmTokenRegistrationWorker @AssistedInject constructor(
             deviceId = deviceId,
             appVersion = BuildConfig.VERSION_NAME
         )
-        if (result is com.mediwise.core.result.Result.Success) {
+        if (result is Result.Success) {
             sessionDataStore.markFcmTokenRegistered(pendingToken)
             return WorkResult.success()
         }
-        if (result is com.mediwise.core.result.Result.Error) {
+        if (result is Result.Error) {
             Log.w(TAG, "FCM token registration failed, will retry: ${result.exception.message}")
         }
         return WorkResult.retry()

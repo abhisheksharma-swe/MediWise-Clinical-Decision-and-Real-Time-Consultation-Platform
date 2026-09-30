@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -373,7 +374,7 @@ private fun CallerAvatar(name: String) {
 }
 
 @Composable
-private fun CallActionButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, background: Color, onClick: () -> Unit) {
+private fun CallActionButton(icon: ImageVector, label: String, background: Color, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
             onClick = onClick,

@@ -9,19 +9,14 @@ import lombok.NoArgsConstructor;
  * The single message type routed through the WebSocket STOMP broker
  * for all WebRTC signaling events.
  *
- * WHY ONE CLASS FOR ALL SIGNAL TYPES:
  * WebRTC signaling has 5 event types (INITIATE, OFFER, ANSWER, ICE, HANGUP).
- * Rather than 5 separate DTO classes, we use one envelope with a "type"
- * discriminator
- * and an untyped "payload" field. This keeps the STOMP message format
- * consistent
- * and lets the Android/Web client use a single message handler.
+ * Rather than 5 separate DTO classes, this uses one envelope with a "type"
+ * discriminator and an untyped "payload" field, keeping the STOMP message
+ * format consistent and letting the Android/Web client use a single message
+ * handler.
  *
- * ANDROID RETROFIT NOTE:
- * This is NOT sent over Retrofit HTTP. It is sent over a WebSocket STOMP
- * connection (e.g. using the 'scarlet' or 'stomp-protocol' library on Android).
- *
- * The roomId is the appointmentId — it uniquely identifies a call session.
+ * Sent over a WebSocket STOMP connection, not Retrofit HTTP. The roomId is
+ * the appointmentId — it uniquely identifies a call session.
  */
 @Data
 @Builder

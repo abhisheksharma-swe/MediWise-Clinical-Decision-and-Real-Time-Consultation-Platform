@@ -22,7 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -83,10 +85,16 @@ public class PrescriptionService {
     public Page<PrescriptionResponse> getForPatient(UUID patientId, User user, int page, int size) {
         authorizationService.assertCanViewPatientHistory(patientId, user);
         Pageable pageable = PageRequest.of(page, Math.min(size, 50), Sort.by("createdAt").descending());
-        return prescriptionRepository.findByPatientIdOrderByCreatedAtDesc(patientId, pageable)
-                .map(p -> PrescriptionResponse.from(p,
-                        prescriptionItemRepository.findByPrescriptionIdOrderBySortOrderAsc(p.getId()).stream()
-                                .map(PrescriptionItemResponse::from).toList()));
+        Page<Prescription> prescriptions = prescriptionRepository.findByPatientIdOrderByCreatedAtDesc(patientId, pageable);
+
+        List<UUID> prescriptionIds = prescriptions.getContent().stream().map(Prescription::getId).toList();
+        Map<UUID, List<PrescriptionItem>> itemsByPrescriptionId = prescriptionItemRepository
+                .findByPrescriptionIdInOrderBySortOrderAsc(prescriptionIds).stream()
+                .collect(Collectors.groupingBy(PrescriptionItem::getPrescriptionId));
+
+        return prescriptions.map(p -> PrescriptionResponse.from(p,
+                itemsByPrescriptionId.getOrDefault(p.getId(), List.of()).stream()
+                        .map(PrescriptionItemResponse::from).toList()));
     }
 
     /** Self-service: the calling patient's own prescriptions. */

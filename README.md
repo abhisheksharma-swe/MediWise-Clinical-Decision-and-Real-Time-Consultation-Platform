@@ -37,6 +37,10 @@ The app uses a **Spring Boot** backend for APIs, authentication, appointments, c
 
 PostgreSQL, MongoDB and Redis are used depending on the type of data. AWS S3 is used for medical files.
 
+## Admin Dashboard
+
+A React (Vite) admin panel for platform management — user/doctor verification, appointment oversight, analytics, and audit logs. Talks to the same Spring Boot backend.
+
 ## Structure
 
 ```text
@@ -67,6 +71,14 @@ API runs on:
 
 ```text
 http://localhost:8080
+```
+
+For the admin dashboard:
+
+```bash
+cd mediwise-admin
+npm install
+npm run dev
 ```
 
 ## Why I built it

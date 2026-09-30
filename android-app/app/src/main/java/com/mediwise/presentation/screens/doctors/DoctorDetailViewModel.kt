@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mediwise.core.result.Result
 import com.mediwise.domain.model.Doctor
+import com.mediwise.domain.model.Review
 import com.mediwise.domain.model.SlotModel
 import com.mediwise.domain.repository.DoctorRepository
+import com.mediwise.domain.usecase.review.GetDoctorReviewsUseCase
 import com.mediwise.domain.usecase.schedule.GetSlotsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ data class DoctorDetailUiState(
     val doctor: Doctor? = null,
     val isFavorite: Boolean = false,
     val todaySlots: List<SlotModel> = emptyList(),
+    val reviews: List<Review> = emptyList(),
     val error: String? = null
 )
 
@@ -30,6 +33,7 @@ data class DoctorDetailUiState(
 class DoctorDetailViewModel @Inject constructor(
     private val repository: DoctorRepository,
     private val getSlotsUseCase: GetSlotsUseCase,
+    private val getDoctorReviewsUseCase: GetDoctorReviewsUseCase,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -82,6 +86,13 @@ class DoctorDetailViewModel @Inject constructor(
                     val isFav = favResult.data.any { it.id == targetId }
                     _uiState.update { it.copy(isFavorite = isFav) }
                 }
+                is Result.Error -> {}
+                is Result.Loading -> {}
+            }
+
+            // 4. Fetch reviews
+            when (val reviewsResult = getDoctorReviewsUseCase(targetId)) {
+                is Result.Success -> _uiState.update { it.copy(reviews = reviewsResult.data) }
                 is Result.Error -> {}
                 is Result.Loading -> {}
             }

@@ -22,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -66,9 +69,13 @@ public class ReviewService {
 
     public Page<ReviewResponse> getForDoctor(UUID doctorId, int page, int size) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 50));
-        return ratingRepository.findByDoctorIdOrderByCreatedAtDesc(doctorId, pageable)
-                .map(r -> ReviewResponse.from(r, patientProfileRepository.findById(r.getPatientId())
-                        .map(PatientProfile::getFullName).orElse(null)));
+        Page<DoctorRating> ratings = ratingRepository.findByDoctorIdOrderByCreatedAtDesc(doctorId, pageable);
+
+        List<UUID> patientIds = ratings.getContent().stream().map(DoctorRating::getPatientId).distinct().toList();
+        Map<UUID, String> patientNamesById = patientProfileRepository.findAllById(patientIds).stream()
+                .collect(Collectors.toMap(PatientProfile::getId, PatientProfile::getFullName));
+
+        return ratings.map(r -> ReviewResponse.from(r, patientNamesById.get(r.getPatientId())));
     }
 
     private void recomputeDoctorRating(UUID doctorId) {
