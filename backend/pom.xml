@@ -22,7 +22,7 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <firebase.version>9.2.0</firebase.version>
-        <redisson.version>3.27.2</redisson.version>
+        <redisson.version>4.7.0</redisson.version>
         <razorpay.version>1.4.5</razorpay.version>
         <springdoc.version>2.5.0</springdoc.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
