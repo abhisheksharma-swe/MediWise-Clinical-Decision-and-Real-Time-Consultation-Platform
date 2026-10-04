@@ -16,6 +16,31 @@ The main focus of the app is connecting patients with doctors — from finding a
 * Razorpay payment integration
 * Role-based authentication
 
+## Screenshots
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center" style="padding: 10px;">
+      <img src="https://github.com/user-attachments/assets/d4c5a301-7bc9-481e-a19f-516df95c45cb" width="220">
+    </td>
+    <td align="center" style="padding: 10px;">
+      <img src="https://github.com/user-attachments/assets/62e8c8bf-9276-407b-843f-7c13e2242020" width="220">
+    </td>
+    <td align="center" style="padding: 10px;">
+      <img src="https://github.com/user-attachments/assets/c9dc35c1-3940-48a9-ae16-5d189d3d99ca" width="220">
+    </td>
+  </tr>
+</table>
+
+<br><br>
+
+<img src="https://github.com/user-attachments/assets/60b14de0-749f-4753-8ed8-e67e14656376" width="750">
+
+</div>
+
+
+
 ## Android
 
 The Android app is built with:
