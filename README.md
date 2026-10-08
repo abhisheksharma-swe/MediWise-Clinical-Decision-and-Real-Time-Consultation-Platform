@@ -9,12 +9,13 @@ The main focus of the app is connecting patients with doctors — from finding a
 * Patient and doctor accounts
 * Doctor search and appointment booking
 * Doctor availability and time slots
-* Real-time chat using WebSockets
-* Video consultation support
+* Real-time chat and audio call using WebSockets
+* Doctor profile recommendation based on patient symptoms using AI
 * AI-based symptom analysis
 * Medical records and file uploads
 * Razorpay payment integration
 * Role-based authentication
+* Preserve Digital Identity
 
 ## Screenshots
 <div align="center">
